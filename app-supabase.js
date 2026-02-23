@@ -365,7 +365,17 @@ function openModal(id) {
   if(id==='m-masuk'){document.getElementById('mk-id').value=genID('BM',DB.masuk);document.getElementById('mk-tgl').value=n;fillSel('mk-satuan','satuan');fillSel('mk-supplier','supplier');fillSel('mk-barang','barang');}
   if(id==='m-keluar'){document.getElementById('kl-id').value=genID('BK',DB.keluar);document.getElementById('kl-tgl').value=n;fillSel('kl-satuan','satuan');fillSel('kl-barang','barang');}
   if(id==='m-pindah'){document.getElementById('pd-id').value=genID('BP',DB.pindah);document.getElementById('pd-tgl').value=n;fillSel('pd-satuan','satuan');fillSel('pd-barang','barang');}
-  if(id==='m-transfer'){document.getElementById('tf-id').value=genID('TF',DB.transfer);document.getElementById('tf-tgl').value=n;fillSel('tf-satuan','satuan');fillSel('tf-barang','barang');}
+  if(id==='m-transfer'){
+    document.getElementById('tf-id').value=genID('TF',DB.transfer);
+    document.getElementById('tf-tgl').value=n;
+    fillSel('tf-satuan','satuan');
+    fillSel('tf-barang','barang');
+    // Isi dropdown vendor dari data supplier
+    const vSel=document.getElementById('tf-vendor');
+    vSel.innerHTML='<option value="">-- Pilih Supplier/Vendor --</option>';
+    DB.supplier.forEach(s=>{vSel.innerHTML+=`<option value="${s.nama}">${esc(s.nama)}${s.telp?' ('+s.telp+')':''}</option>`;});
+    document.getElementById('tf-stok-info').style.display='none';
+  }
   if(id==='m-barang'){document.getElementById('foto-preview-img').style.display='none';document.getElementById('foto-input').value='';}
   document.getElementById(id).classList.add('open');
 }
@@ -378,7 +388,39 @@ function fillSel(selId,type) {
   else if(type==='satuan'){s.innerHTML='<option value="">-- Satuan --</option>';DB.satuan.forEach(x=>s.innerHTML+=`<option value="${x.nama}">${x.nama}</option>`);}
   else if(type==='supplier'){s.innerHTML='<option value="">-- Pilih Supplier --</option>';DB.supplier.filter(x=>x.status==='Aktif').forEach(x=>s.innerHTML+=`<option value="${x.id}">${esc(x.nama)}</option>`);}
 }
-function fillBarang(prefix){const bid=document.getElementById(prefix+'-barang')?.value,b=DB.barang.find(x=>x.id===bid),el=document.getElementById(prefix+'-part');if(el&&b)el.value=b.part_number;}
+
+function checkTransferQty() {
+  const bid=document.getElementById('tf-barang').value;
+  const qty=parseInt(document.getElementById('tf-qty').value)||0;
+  if(!bid||!qty) return;
+  const b=DB.barang.find(x=>x.id===bid);
+  if(!b) return;
+  const s=getStok(b.id);
+  const infoEl=document.getElementById('tf-stok-info');
+  // Transfer = barang masuk, tampilkan preview stok setelah tambah
+  infoEl.style.display='block';
+  infoEl.style.background='var(--green-bg)';
+  infoEl.style.borderColor='var(--green-light)';
+  infoEl.style.color='var(--green)';
+  infoEl.innerHTML='📦 Stok saat ini: <strong>' + fmt(s.gudang+s.storing) + '</strong> unit → setelah transfer: <strong style="font-size:13px">+' + fmt(qty) + ' = ' + fmt(s.gudang+s.storing+qty) + '</strong> unit';
+}
+
+function fillBarang(prefix) {
+  const bid=document.getElementById(prefix+'-barang')?.value;
+  const b=DB.barang.find(x=>x.id===bid);
+  const el=document.getElementById(prefix+'-part');
+  if(el&&b) el.value=b.part_number||'';
+  // Khusus transfer: tampilkan info stok
+  if(prefix==='tf' && b) {
+    const s=getStok(b.id);
+    document.getElementById('tf-stok-info').style.display='block';
+    document.getElementById('tf-stok-val').textContent=fmt(s.gudang+s.storing);
+    document.getElementById('tf-stok-g').textContent=fmt(s.gudang);
+    document.getElementById('tf-stok-s').textContent=fmt(s.storing);
+  } else if(prefix==='tf') {
+    document.getElementById('tf-stok-info').style.display='none';
+  }
+}
 
 // ============================================================
 // FOTO & QR
@@ -489,12 +531,49 @@ async function savePindah() {
   }catch(e){toast(e.message,'err');}
 }
 async function saveTransfer() {
-  const bid=document.getElementById('tf-barang').value,qty=parseInt(document.getElementById('tf-qty').value);
+  const bid=document.getElementById('tf-barang').value;
+  const qty=parseInt(document.getElementById('tf-qty').value);
+  const vendor=document.getElementById('tf-vendor').value;
+  const lokasi=document.getElementById('tf-lokasi')?.value||'Gudang';
   if(!bid||!qty||qty<1){toast('Barang & QTY wajib','err');return;}
+  if(!vendor){toast('Vendor/Supplier wajib dipilih','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
+  // Cari supplier_id dari nama vendor
+  const sup=DB.supplier.find(s=>s.nama===vendor);
   try{
-    await sbInsert('transfer_part',{id:document.getElementById('tf-id').value,tanggal:document.getElementById('tf-tgl').value,barang_id:bid,nama_barang:b.nama,qty,satuan:document.getElementById('tf-satuan').value,vendor:document.getElementById('tf-vendor').value,penerima:document.getElementById('tf-penerima').value,keterangan:document.getElementById('tf-ket').value,created_by:SESSION?.user?.id});
-    closeModal('m-transfer');await loadAllData();renderTransfer();toast('Transfer dicatat');
+    // 1. Catat transaksi transfer
+    await sbInsert('transfer_part',{
+      id:document.getElementById('tf-id').value,
+      tanggal:document.getElementById('tf-tgl').value,
+      barang_id:bid, nama_barang:b.nama, qty,
+      satuan:document.getElementById('tf-satuan').value,
+      vendor, lokasi_stok:lokasi,
+      penerima:document.getElementById('tf-penerima').value,
+      keterangan:document.getElementById('tf-ket').value,
+      created_by:SESSION?.user?.id
+    });
+    // 2. Tambah stok — catat otomatis sebagai barang masuk
+    const masukId = genID('BM', DB.masuk);
+    await sbInsert('barang_masuk',{
+      id: masukId,
+      tanggal: document.getElementById('tf-tgl').value,
+      barang_id: bid,
+      nama_barang: b.nama,
+      qty,
+      satuan: document.getElementById('tf-satuan').value,
+      harga: 0,
+      supplier_id: sup?.id || null,
+      penerima: document.getElementById('tf-penerima').value,
+      keterangan: 'Transfer dari: ' + vendor + (document.getElementById('tf-ket').value ? ' — ' + document.getElementById('tf-ket').value : ''),
+      lokasi: lokasi,
+      created_by: SESSION?.user?.id
+    });
+    closeModal('m-transfer');
+    await loadAllData();
+    renderTransfer();
+    renderMasuk();
+    renderDashboard();
+    toast('✅ Transfer dicatat, stok ' + lokasi + ' bertambah ' + fmt(qty) + ' unit');
   }catch(e){toast(e.message,'err');}
 }
 async function saveOpname() {
