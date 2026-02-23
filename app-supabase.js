@@ -544,41 +544,49 @@ async function saveTransfer() {
   const b=DB.barang.find(x=>x.id===bid);
   // Cari supplier_id dari nama vendor
   const sup=DB.supplier.find(s=>s.nama===vendor);
+  const tgl = document.getElementById('tf-tgl').value;
+  const satuan = document.getElementById('tf-satuan').value;
+  const penerima = document.getElementById('tf-penerima').value;
+  const ket = document.getElementById('tf-ket').value;
+  const tfId = document.getElementById('tf-id').value;
+
   try{
-    // 1. Catat transaksi transfer
-    await sbInsert('transfer_part',{
-      id:document.getElementById('tf-id').value,
-      tanggal:document.getElementById('tf-tgl').value,
-      barang_id:bid, nama_barang:b.nama, qty,
-      satuan:document.getElementById('tf-satuan').value,
-      vendor, lokasi_stok:lokasi,
-      penerima:document.getElementById('tf-penerima').value,
-      keterangan:document.getElementById('tf-ket').value,
-      created_by:SESSION?.user?.id
-    });
-    // 2. Tambah stok — catat otomatis sebagai barang masuk
+    // 1. Catat ke transfer_part (tanpa lokasi_stok dulu — kolom ini opsional)
+    const tfRow = {
+      id: tfId, tanggal: tgl,
+      barang_id: bid, nama_barang: b.nama,
+      qty, satuan, vendor, penerima,
+      keterangan: ket, created_by: SESSION?.user?.id
+    };
+    // Coba tambah lokasi_stok, kalau kolom belum ada tidak masalah
+    try { tfRow.lokasi_stok = lokasi; } catch(_){}
+
+    const { error: e1 } = await sb.from('transfer_part').upsert([tfRow]);
+    if(e1) throw new Error('Transfer: ' + e1.message);
+
+    // 2. Otomatis tambah stok lewat barang_masuk
     const masukId = genID('BM', DB.masuk);
-    await sbInsert('barang_masuk',{
-      id: masukId,
-      tanggal: document.getElementById('tf-tgl').value,
-      barang_id: bid,
-      nama_barang: b.nama,
-      qty,
-      satuan: document.getElementById('tf-satuan').value,
-      harga: 0,
+    const { error: e2 } = await sb.from('barang_masuk').insert([{
+      id: masukId, tanggal: tgl,
+      barang_id: bid, nama_barang: b.nama,
+      qty, satuan, harga: 0,
       supplier_id: sup?.id || null,
-      penerima: document.getElementById('tf-penerima').value,
-      keterangan: 'Transfer dari: ' + vendor + (document.getElementById('tf-ket').value ? ' — ' + document.getElementById('tf-ket').value : ''),
-      lokasi: lokasi,
-      created_by: SESSION?.user?.id
-    });
+      penerima,
+      keterangan: 'Transfer dari: ' + vendor + (ket ? ' — ' + ket : ''),
+      lokasi, created_by: SESSION?.user?.id
+    }]);
+    if(e2) throw new Error('Barang masuk: ' + e2.message);
+
     closeModal('m-transfer');
     await loadAllData();
     renderTransfer();
     renderMasuk();
     renderDashboard();
     toast('✅ Transfer dicatat, stok ' + lokasi + ' bertambah ' + fmt(qty) + ' unit');
-  }catch(e){toast(e.message,'err');}
+  }catch(e){
+    toast('Gagal simpan: ' + e.message, 'err');
+    console.error('saveTransfer error:', e);
+  }
 }
 async function saveOpname() {
   const inputs=document.querySelectorAll('.opname-input');
@@ -609,15 +617,25 @@ async function saveOpname() {
 // DELETE — langsung Supabase
 // ============================================================
 function deleteItem(col,id,name) {
-  const tables={barang:'barang',supplier:'supplier',masuk:'barang_masuk',keluar:'barang_keluar',pindah:'barang_pindah',transfer:'transfer_part'};
+  const tables={barang:'barang',supplier:'supplier',satuan:'satuan',masuk:'barang_masuk',keluar:'barang_keluar',pindah:'barang_pindah',transfer:'transfer_part'};
   showConfirm(`Hapus data?`,`"${name}" akan dihapus permanen.`,async()=>{
     try{
-      await sbDelete(tables[col],id);
+      const tbl = tables[col];
+      if(!tbl){toast('Tabel tidak dikenali','err');return;}
+      const {error} = await sb.from(tbl).delete().eq('id',id);
+      if(error){
+        if(error.message.includes('policy') || error.code==='42501'){
+          toast('Tidak punya izin hapus. Jalankan SQL fix RLS di Supabase.','err');
+        } else {
+          toast('Gagal hapus: ' + error.message,'err');
+        }
+        return;
+      }
       await loadAllData();
-      const R={barang:renderMasterBarang,supplier:renderSupplier,masuk:renderMasuk,keluar:renderKeluar,pindah:renderPindah,transfer:renderTransfer};
+      const R={barang:renderMasterBarang,supplier:renderSupplier,satuan:renderSatuan,masuk:renderMasuk,keluar:renderKeluar,pindah:renderPindah,transfer:renderTransfer};
       if(R[col])R[col]();
       toast(`"${name}" dihapus`,'warn');
-    }catch(e){toast(e.message,'err');}
+    }catch(e){toast('Error: '+e.message,'err');console.error(e);}
   });
 }
 
