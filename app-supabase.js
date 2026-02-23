@@ -441,7 +441,7 @@ function rebuildCharts(){setTimeout(()=>{buildTrendChart();buildDonutChart();},1
 // ============================================================
 async function saveBarang() {
   const id=document.getElementById('b-id').value.trim(),nama=document.getElementById('b-nama').value.trim(),part_number=document.getElementById('b-part').value.trim();
-  if(!id||!nama||!part_number){toast('ID, Nama & Part Number wajib','err');return;}
+  if(!id||!nama){toast('ID & Nama Barang wajib','err');return;}
   try{
     await sbInsert('barang',{id,nama,part_number,model:document.getElementById('b-model').value,stok_gudang:parseInt(document.getElementById('b-stok-g').value)||0,stok_storing:parseInt(document.getElementById('b-stok-s').value)||0});
     closeModal('m-barang');['b-id','b-nama','b-part','b-model'].forEach(x=>document.getElementById(x).value='');
@@ -682,7 +682,7 @@ const IMPORT_CONFIG = {
     ico: '📦',
     headers: ['ID Barang','Nama Barang','Part Number','Model Kendaraan','Stok Gudang','Stok Storing'],
     keys:    ['id','nama','part_number','model','stok_gudang','stok_storing'],
-    required: ['id','nama','part_number'],
+    required: ['id','nama'],
     template: [
       ['ID Barang','Nama Barang','Part Number','Model Kendaraan','Stok Gudang','Stok Storing'],
       ['BRG-007','Filter Udara','FU-1122-A','Toyota Kijang','20','10'],
