@@ -410,15 +410,19 @@ function fillBarang(prefix) {
   const b=DB.barang.find(x=>x.id===bid);
   const el=document.getElementById(prefix+'-part');
   if(el&&b) el.value=b.part_number||'';
-  // Khusus transfer: tampilkan info stok
-  if(prefix==='tf' && b) {
-    const s=getStok(b.id);
-    document.getElementById('tf-stok-info').style.display='block';
-    document.getElementById('tf-stok-val').textContent=fmt(s.gudang+s.storing);
-    document.getElementById('tf-stok-g').textContent=fmt(s.gudang);
-    document.getElementById('tf-stok-s').textContent=fmt(s.storing);
-  } else if(prefix==='tf') {
-    document.getElementById('tf-stok-info').style.display='none';
+  // Khusus transfer: tampilkan info stok saat ini
+  const infoEl=document.getElementById('tf-stok-info');
+  if(prefix==='tf' && infoEl) {
+    if(b) {
+      const s=getStok(b.id);
+      infoEl.style.display='block';
+      infoEl.style.background='var(--blue-bg)';
+      infoEl.style.borderColor='var(--blue-light)';
+      infoEl.style.color='var(--blue)';
+      infoEl.innerHTML='📦 Stok saat ini: <strong>'+fmt(s.gudang+s.storing)+'</strong> unit (Gudang: '+fmt(s.gudang)+' | Storing: '+fmt(s.storing)+') — akan bertambah setelah disimpan';
+    } else {
+      infoEl.style.display='none';
+    }
   }
 }
 
