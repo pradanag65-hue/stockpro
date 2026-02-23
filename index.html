@@ -464,11 +464,15 @@
 <!-- Transfer -->
 <div class="modal-overlay" id="m-transfer">
   <div class="modal lg">
-    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico p">📋</div><div><div class="modal-title">Input Transfer Part List</div><div class="modal-sub">Transfer suku cadang ke vendor/penerima</div></div></div><button class="btn-x" onclick="closeModal('m-transfer')">✕</button></div>
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico p">📋</div><div><div class="modal-title">Input Transfer Part List</div><div class="modal-sub">Penerimaan suku cadang dari vendor/supplier — stok otomatis bertambah</div></div></div><button class="btn-x" onclick="closeModal('m-transfer')">✕</button></div>
     <div class="modal-body">
       <div class="fr"><div class="fg"><label class="fl">ID Transfer</label><input class="fc" id="tf-id" readonly></div><div class="fg"><label class="fl">Tanggal *</label><input class="fc" id="tf-tgl" type="date"></div></div>
       <div class="fg"><label class="fl">Nama Barang *</label><select class="fc" id="tf-barang" onchange="fillBarang('tf')"><option value="">-- Pilih Barang --</option></select></div>
-      <div class="fr3"><div class="fg"><label class="fl">QTY *</label><input class="fc" id="tf-qty" type="number" min="1" placeholder="0"></div><div class="fg"><label class="fl">Satuan</label><select class="fc" id="tf-satuan"><option value="">-- Satuan --</option></select></div><div class="fg"><label class="fl">Vendor</label><input class="fc" id="tf-vendor" placeholder="Nama vendor/bengkel"></div></div>
+      <div id="tf-stok-info" style="display:none;background:var(--blue-bg);border:1px solid var(--blue-light);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--blue);margin-bottom:4px">
+        📦 Stok saat ini: <strong id="tf-stok-val">0</strong> unit (Gudang: <span id="tf-stok-g">0</span> | Storing: <span id="tf-stok-s">0</span>) — akan bertambah setelah disimpan
+      </div>
+      <div class="fr3"><div class="fg"><label class="fl">QTY *</label><input class="fc" id="tf-qty" type="number" min="1" placeholder="0" oninput="checkTransferQty()"></div><div class="fg"><label class="fl">Satuan</label><select class="fc" id="tf-satuan"><option value="">-- Satuan --</option></select></div><div class="fg"><label class="fl">Masuk ke Lokasi *</label><select class="fc" id="tf-lokasi"><option value="Gudang">Gudang</option><option value="Storing">Storing</option></select></div></div>
+      <div class="fg"><label class="fl">Vendor / Supplier *</label><select class="fc" id="tf-vendor"><option value="">-- Pilih Supplier/Vendor --</option></select></div>
       <div class="fg"><label class="fl">Penerima</label><input class="fc" id="tf-penerima" placeholder="Nama penerima transfer"></div>
       <div class="fg"><label class="fl">Keterangan</label><input class="fc" id="tf-ket" placeholder="Catatan transfer"></div>
     </div>
