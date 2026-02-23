@@ -591,3 +591,319 @@ function exportOpnamePDF(){const{jsPDF}=window.jspdf;const doc=new jsPDF();doc.s
   }
   checkSession();
 })();
+
+// ============================================================
+// IMPORT EXCEL — semua modul
+// ============================================================
+
+// Config kolom per tipe import
+const IMPORT_CONFIG = {
+  barang: {
+    title: 'Import Data Barang',
+    sub: 'Format: ID Barang, Nama Barang, Part Number, Model, Stok Gudang, Stok Storing',
+    ico: '📦',
+    headers: ['ID Barang','Nama Barang','Part Number','Model Kendaraan','Stok Gudang','Stok Storing'],
+    keys:    ['id','nama','part_number','model','stok_gudang','stok_storing'],
+    required: ['id','nama','part_number'],
+    template: [
+      ['ID Barang','Nama Barang','Part Number','Model Kendaraan','Stok Gudang','Stok Storing'],
+      ['BRG-007','Filter Udara','FU-1122-A','Toyota Kijang','20','10'],
+      ['BRG-008','Kampas Kopling','KK-3344-B','Mitsubishi Fuso','15','5'],
+    ]
+  },
+  supplier: {
+    title: 'Import Data Supplier',
+    sub: 'Format: ID, Nama, Alamat, No. Telp, Status, Keterangan',
+    ico: '🏭',
+    headers: ['ID Supplier','Nama Supplier','Alamat','No. Telp','Status','Keterangan'],
+    keys:    ['id','nama','alamat','telp','status','keterangan'],
+    required: ['id','nama'],
+    template: [
+      ['ID Supplier','Nama Supplier','Alamat','No. Telp','Status','Keterangan'],
+      ['SUP-004','PT. Abadi Jaya','Jl. Raya No.10, Surabaya','031-1234567','Aktif','Supplier baru'],
+    ]
+  },
+  satuan: {
+    title: 'Import Data Satuan',
+    sub: 'Format: Nama Satuan, Keterangan',
+    ico: '📏',
+    headers: ['Nama Satuan','Keterangan'],
+    keys:    ['nama','keterangan'],
+    required: ['nama'],
+    template: [
+      ['Nama Satuan','Keterangan'],
+      ['Botol','Satuan per botol'],
+      ['Kaleng','Satuan per kaleng'],
+    ]
+  },
+  masuk: {
+    title: 'Import Barang Masuk',
+    sub: 'Format: ID Transaksi, Tanggal, ID Barang, QTY, Satuan, Harga, ID Supplier, Penerima, Keterangan',
+    ico: '📥',
+    headers: ['ID Transaksi','Tanggal','ID Barang','QTY','Satuan','Harga','ID Supplier','Penerima','Keterangan'],
+    keys:    ['id','tanggal','barang_id','qty','satuan','harga','supplier_id','penerima','keterangan'],
+    required: ['tanggal','barang_id','qty','satuan'],
+    template: [
+      ['ID Transaksi','Tanggal','ID Barang','QTY','Satuan','Harga','ID Supplier','Penerima','Keterangan'],
+      ['BM-001','2025-02-23','BRG-001','10','Pcs','45000','SUP-001','Budi','PO Februari'],
+    ]
+  },
+  keluar: {
+    title: 'Import Barang Keluar',
+    sub: 'Format: ID, Tanggal, No.Lambung, KM, ID Barang, QTY, Satuan, Lokasi, Mekanik, Penggunaan, Keterangan',
+    ico: '📤',
+    headers: ['ID','Tanggal','No.Lambung','KM','ID Barang','QTY','Satuan','Lokasi Stok','Mekanik','Penggunaan','Keterangan'],
+    keys:    ['id','tanggal','no_lambung','kilometer','barang_id','qty','satuan','lokasi_stok','mekanik','penggunaan','keterangan'],
+    required: ['tanggal','barang_id','qty','satuan'],
+    template: [
+      ['ID','Tanggal','No.Lambung','KM','ID Barang','QTY','Satuan','Lokasi Stok','Mekanik','Penggunaan','Keterangan'],
+      ['BK-001','2025-02-23','B 1234 AB','45000','BRG-001','2','Pcs','Gudang','Mekanik 1 - Budi','Breakdown',''],
+    ]
+  },
+  pindah: {
+    title: 'Import Barang Pindah',
+    sub: 'Format: ID, Tanggal, ID Barang, QTY, Satuan, Dari, Ke',
+    ico: '🔄',
+    headers: ['ID','Tanggal','ID Barang','QTY','Satuan','Dari','Ke'],
+    keys:    ['id','tanggal','barang_id','qty','satuan','dari','ke'],
+    required: ['tanggal','barang_id','qty','dari','ke'],
+    template: [
+      ['ID','Tanggal','ID Barang','QTY','Satuan','Dari','Ke'],
+      ['BP-001','2025-02-23','BRG-001','5','Pcs','Gudang','Storing'],
+    ]
+  },
+  transfer: {
+    title: 'Import Transfer Part List',
+    sub: 'Format: ID, Tanggal, ID Barang, QTY, Satuan, Vendor, Penerima, Keterangan',
+    ico: '📋',
+    headers: ['ID','Tanggal','ID Barang','QTY','Satuan','Vendor','Penerima','Keterangan'],
+    keys:    ['id','tanggal','barang_id','qty','satuan','vendor','penerima','keterangan'],
+    required: ['tanggal','barang_id','qty'],
+    template: [
+      ['ID','Tanggal','ID Barang','QTY','Satuan','Vendor','Penerima','Keterangan'],
+      ['TF-001','2025-02-23','BRG-001','3','Pcs','Bengkel Maju','Anton','Transfer rutin'],
+    ]
+  }
+};
+
+let currentImportType = null;
+let importRows = [];
+let importValidRows = [];
+
+// ---- BUKA MODAL IMPORT ----
+function openImport(type) {
+  currentImportType = type;
+  importRows = [];
+  importValidRows = [];
+  const cfg = IMPORT_CONFIG[type];
+  document.getElementById('import-title').textContent = cfg.title;
+  document.getElementById('import-sub').textContent = cfg.sub;
+  document.getElementById('import-ico').textContent = cfg.ico;
+  document.getElementById('import-preview').style.display = 'none';
+  document.getElementById('import-submit-btn').style.display = 'none';
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-dropzone').style.display = 'flex';
+  openModal('m-import');
+}
+
+// ---- DOWNLOAD TEMPLATE ----
+function downloadTemplate(type) {
+  const cfg = IMPORT_CONFIG[type];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(cfg.template);
+  // Style header row width
+  ws['!cols'] = cfg.headers.map(() => ({ wch: 20 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Template');
+  XLSX.writeFile(wb, `template-${type}.xlsx`);
+  toast(`Template ${cfg.title} diunduh 📋`);
+}
+
+// ---- HANDLE FILE DROP ----
+function handleImportDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-dropzone').style.borderColor = 'var(--green-light)';
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+}
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (file) processImportFile(file);
+}
+
+// ---- PROSES FILE EXCEL ----
+function processImportFile(file) {
+  if (!file.name.match(/\.(xlsx|xls)$/i)) {
+    toast('File harus berformat .xlsx atau .xls', 'err');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    toast('Ukuran file maksimal 5MB', 'err');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      parseImportRows(rows);
+    } catch(err) {
+      toast('Gagal membaca file: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ---- PARSE & VALIDASI BARIS ----
+function parseImportRows(rows) {
+  const cfg = IMPORT_CONFIG[currentImportType];
+  if (rows.length < 2) { toast('File kosong atau hanya ada header', 'warn'); return; }
+
+  // Skip baris pertama (header)
+  const dataRows = rows.slice(1).filter(r => r.some(c => c !== ''));
+  importRows = [];
+  importValidRows = [];
+  const errors = [];
+
+  dataRows.forEach((row, i) => {
+    const obj = {};
+    cfg.keys.forEach((key, ki) => {
+      let val = row[ki] !== undefined ? String(row[ki]).trim() : '';
+      // Format tanggal
+      if (key === 'tanggal' && val) {
+        if (val.includes('/')) val = val.split('/').reverse().join('-'); // dd/mm/yyyy → yyyy-mm-dd
+        else if (val.match(/^\d{2}-\d{2}-\d{4}$/)) val = val.split('-').reverse().join('-');
+        else if (val instanceof Date) val = val.toISOString().split('T')[0];
+      }
+      // Konversi angka
+      if (['qty','stok_gudang','stok_storing','harga','kilometer'].includes(key)) {
+        val = parseInt(val) || 0;
+      }
+      obj[key] = val;
+    });
+
+    // Generate ID jika kosong
+    if (!obj.id && cfg.keys.includes('id')) {
+      const prefix = {barang:'BRG',supplier:'SUP',masuk:'BM',keluar:'BK',pindah:'BP',transfer:'TF'}[currentImportType]||'ID';
+      obj.id = `${prefix}-IMP-${String(i+1).padStart(3,'0')}`;
+    }
+
+    // Validasi required
+    const missing = cfg.required.filter(k => !obj[k] || obj[k] === '0' && k !== 'qty');
+    if (missing.length) {
+      errors.push(`Baris ${i+2}: kolom "${missing.join(', ')}" wajib diisi`);
+      obj._error = true;
+    }
+
+    // Validasi barang_id exists
+    if (obj.barang_id && !DB.barang.find(b => b.id === obj.barang_id)) {
+      errors.push(`Baris ${i+2}: ID Barang "${obj.barang_id}" tidak ditemukan`);
+      obj._error = true;
+    }
+
+    importRows.push(obj);
+    if (!obj._error) importValidRows.push(obj);
+  });
+
+  renderImportPreview(errors);
+}
+
+// ---- RENDER PREVIEW TABEL ----
+function renderImportPreview(errors) {
+  const cfg = IMPORT_CONFIG[currentImportType];
+  document.getElementById('import-preview').style.display = 'block';
+  document.getElementById('import-dropzone').style.display = 'none';
+  document.getElementById('import-preview-title').textContent = `Preview: ${importRows.length} baris ditemukan`;
+  document.getElementById('import-ok-count').textContent = `${importValidRows.length} valid`;
+
+  const errEl = document.getElementById('import-err-count');
+  const errNum = importRows.length - importValidRows.length;
+  if (errNum > 0) {
+    errEl.textContent = `${errNum} error`; errEl.style.display = '';
+    document.getElementById('import-errors').style.display = 'block';
+    document.getElementById('import-error-list').innerHTML = errors.map(e => `<div>⚠️ ${esc(e)}</div>`).join('');
+  } else {
+    errEl.style.display = 'none';
+    document.getElementById('import-errors').style.display = 'none';
+  }
+
+  // Header
+  document.getElementById('import-thead').innerHTML = `<th style="color:var(--muted);font-size:11px">#</th>` +
+    cfg.headers.map(h => `<th style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;padding:8px 10px">${h}</th>`).join('') +
+    `<th style="font-size:11px">Status</th>`;
+
+  // Body
+  document.getElementById('import-tbody').innerHTML = importRows.slice(0,50).map((row, i) => {
+    const cells = cfg.keys.map(k => `<td style="font-size:12px;padding:7px 10px">${esc(String(row[k]||'—'))}</td>`).join('');
+    const status = row._error
+      ? `<td><span class="badge bg-red">Error</span></td>`
+      : `<td><span class="badge bg-green">✓ Valid</span></td>`;
+    return `<tr style="${row._error ? 'background:var(--red-bg);opacity:0.8' : ''}">${`<td style="color:var(--muted);font-size:11px;padding:7px 10px">${i+1}</td>`}${cells}${status}</tr>`;
+  }).join('');
+
+  if (importValidRows.length > 0) {
+    document.getElementById('import-submit-btn').style.display = '';
+    document.getElementById('import-submit-btn').textContent = `📥 Import ${importValidRows.length} Data`;
+  } else {
+    document.getElementById('import-submit-btn').style.display = 'none';
+    toast('Tidak ada data valid untuk diimport', 'warn');
+  }
+}
+
+// ---- SUBMIT IMPORT KE SUPABASE ----
+async function submitImport() {
+  if (!importValidRows.length) return;
+  const btn = document.getElementById('import-submit-btn');
+  btn.textContent = '⏳ Mengimport...';
+  btn.disabled = true;
+
+  const tableMap = {
+    barang:'barang', supplier:'supplier', satuan:'satuan',
+    masuk:'barang_masuk', keluar:'barang_keluar',
+    pindah:'barang_pindah', transfer:'transfer_part'
+  };
+  const table = tableMap[currentImportType];
+
+  // Tambahkan created_by
+  const rows = importValidRows.map(r => {
+    const clean = {...r};
+    delete clean._error;
+    if (table !== 'barang' && table !== 'supplier' && table !== 'satuan') {
+      clean.created_by = SESSION?.user?.id || null;
+      // Isi nama_barang otomatis
+      if (clean.barang_id) {
+        const b = DB.barang.find(x => x.id === clean.barang_id);
+        if (b) clean.nama_barang = b.nama;
+      }
+    }
+    return clean;
+  });
+
+  try {
+    // Upsert dengan batch 50 baris
+    const batchSize = 50;
+    let imported = 0;
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+      const { error } = await sb.from(table).upsert(batch, { onConflict: 'id' });
+      if (error) throw new Error(error.message);
+      imported += batch.length;
+    }
+    closeModal('m-import');
+    await loadAllData();
+    // Refresh halaman yang sedang aktif
+    const R = {
+      barang:renderMasterBarang, supplier:renderSupplier, satuan:renderSatuan,
+      masuk:renderMasuk, keluar:renderKeluar, pindah:renderPindah, transfer:renderTransfer
+    };
+    if (R[currentImportType]) R[currentImportType]();
+    renderDashboard();
+    toast(`✅ Berhasil import ${imported} data ${currentImportType}`);
+  } catch(e) {
+    toast('Import gagal: ' + e.message, 'err');
+    btn.textContent = `📥 Import ${importValidRows.length} Data`;
+    btn.disabled = false;
+  }
+}
