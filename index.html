@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockPro — Sistem Manajemen Gudang</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00704A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StockPro">
+<link rel="apple-touch-icon" href="https://placehold.co/192x192/00704A/white?text=SP">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ====== NAVBAR ====== -->
+<nav class="navbar">
+  <div class="nav-brand" onclick="goPage('dashboard')">
+    <div class="nav-brand-logo">⚙️</div>
+    <div>
+      <div class="nav-brand-name">StockPro</div>
+      <div class="nav-brand-sub">Manajemen Gudang</div>
+    </div>
+  </div>
+
+  <ul class="nav-menu">
+    <li>
+      <button class="nav-link active" id="nl-dashboard" onclick="goPage('dashboard')">
+        <span class="ni">📊</span> Dashboard
+      </button>
+    </li>
+    <li id="grp-master">
+      <button class="nav-link" id="nl-master" onclick="toggleGroup('master')">
+        <span class="ni">🗂️</span> Data Master <span class="arr">▾</span>
+      </button>
+      <div class="dropdown" id="dd-master">
+        <div class="dd-arrow"></div>
+        <div class="dd-head">Data Master</div>
+        <div class="dd-item" id="ddi-master-barang" onclick="goPage('master-barang')"><div class="dd-ico">📦</div><span>Data Barang</span></div>
+        <div class="dd-item" id="ddi-master-supplier" onclick="goPage('master-supplier')"><div class="dd-ico">🏭</div><span>Data Supplier</span></div>
+        <div class="dd-item" id="ddi-master-satuan" onclick="goPage('master-satuan')"><div class="dd-ico">📏</div><span>Data Satuan</span></div>
+      </div>
+    </li>
+    <li id="grp-input">
+      <button class="nav-link" id="nl-input" onclick="toggleGroup('input')">
+        <span class="ni">📝</span> Input Data <span class="arr">▾</span>
+      </button>
+      <div class="dropdown" id="dd-input">
+        <div class="dd-arrow"></div>
+        <div class="dd-head">Transaksi</div>
+        <div class="dd-item" id="ddi-inp-masuk" onclick="goPage('inp-masuk')"><div class="dd-ico">📥</div><span>Barang Masuk</span><span class="dd-badge g" id="nb-masuk">0</span></div>
+        <div class="dd-item" id="ddi-inp-keluar" onclick="goPage('inp-keluar')"><div class="dd-ico">📤</div><span>Barang Keluar</span><span class="dd-badge r" id="nb-keluar">0</span></div>
+        <div class="dd-item" id="ddi-inp-pindah" onclick="goPage('inp-pindah')"><div class="dd-ico">🔄</div><span>Barang Pindah</span></div>
+        <div class="dd-item" id="ddi-inp-transfer" onclick="goPage('inp-transfer')"><div class="dd-ico">📋</div><span>Transfer Part List</span></div>
+        <div class="dd-item" id="ddi-inp-opname" onclick="goPage('inp-opname')"><div class="dd-ico">🔍</div><span>Stock Opname</span></div>
+      </div>
+    </li>
+    <li id="grp-laporan">
+      <button class="nav-link" id="nl-laporan" onclick="toggleGroup('laporan')">
+        <span class="ni">📈</span> Laporan <span class="arr">▾</span>
+      </button>
+      <div class="dropdown" id="dd-laporan">
+        <div class="dd-arrow"></div>
+        <div class="dd-head">Laporan</div>
+        <div class="dd-item" id="ddi-lap-rekap" onclick="goPage('lap-rekap')"><div class="dd-ico">📈</div><span>Laporan Rekapitulasi</span></div>
+        <div class="dd-item" id="ddi-lap-opname" onclick="goPage('lap-opname')"><div class="dd-ico">📑</div><span>Laporan Stock Opname</span></div>
+      </div>
+    </li>
+  </ul>
+
+  <div class="nav-right">
+    <!-- Global Search trigger -->
+    <div class="nav-btn" onclick="openGSearch()" title="Pencarian Global (Ctrl+K)" style="width:auto;padding:0 12px;gap:8px;font-size:12px;color:rgba(255,255,255,0.6);">
+      🔍 <span style="font-size:12px">Cari...</span>
+      <span class="nav-kbd"><span class="kbd">Ctrl</span><span class="kbd">K</span></span>
+    </div>
+    <!-- Dark mode -->
+    <div class="nav-btn" id="dm-btn" onclick="toggleDark()" title="Dark Mode">🌙</div>
+    <!-- Alerts -->
+    <div class="nav-btn" id="alert-btn" onclick="goPage('dashboard')" title="Stok Kritis">🔔</div>
+    <div class="nav-date" id="nav-date"></div>
+    <div class="nav-av" title="Admin Gudang">AD</div>
+  </div>
+</nav>
+
+<!-- BREADCRUMB -->
+<div class="breadcrumb">
+  <span>🏠</span><span class="bc-sep">›</span>
+  <span>StockPro</span><span class="bc-sep">›</span>
+  <span class="bc-cur" id="bc-cur">Dashboard</span>
+</div>
+
+<!-- ====== CONTENT ====== -->
+<div class="content">
+
+  <!-- ===== DASHBOARD ===== -->
+  <div id="page-dashboard" class="page active">
+    <div class="hero">
+      <div>
+        <div class="hero-title">Selamat Datang di StockPro 👋</div>
+        <div class="hero-sub" id="dash-sub">Pantau & kelola inventori gudang secara real-time</div>
+        <div class="hero-badges">
+          <span class="hero-badge" id="hb-barang">📦 0 Barang</span>
+          <span class="hero-badge" id="hb-supplier">🏭 0 Supplier</span>
+          <span class="hero-badge" id="hb-trx">📝 0 Transaksi Hari Ini</span>
+        </div>
+      </div>
+      <div class="hero-icon">⚙️</div>
+    </div>
+
+    <!-- Alert Panel -->
+    <div class="alert-panel" id="alert-panel">
+      <div class="alert-panel-header">
+        <div class="alert-panel-title">🚨 Perhatian — Stok Kritis/Habis</div>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('alert-panel').classList.remove('show')">✕ Tutup</button>
+      </div>
+      <div class="alert-items" id="alert-items"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card sg"><div class="stat-header"><div class="stat-ico g">📦</div><span class="stat-trend up" id="tr-barang">+0</span></div><div class="stat-label">Total Barang</div><div class="stat-val" id="d-barang">0</div><div class="stat-sub">Jenis barang terdaftar</div></div>
+      <div class="stat-card sg"><div class="stat-header"><div class="stat-ico g">📥</div><span class="stat-trend up" id="tr-masuk">+0</span></div><div class="stat-label">Total Masuk</div><div class="stat-val" id="d-masuk">0</div><div class="stat-sub">Total qty diterima</div></div>
+      <div class="stat-card sr"><div class="stat-header"><div class="stat-ico r">📤</div><span class="stat-trend dn" id="tr-keluar">-0</span></div><div class="stat-label">Total Keluar</div><div class="stat-val" id="d-keluar">0</div><div class="stat-sub">Total qty dikeluarkan</div></div>
+      <div class="stat-card sb"><div class="stat-header"><div class="stat-ico b">📊</div><span class="stat-trend up" id="tr-sisa">0</span></div><div class="stat-label">Sisa Stok</div><div class="stat-val" id="d-sisa">0</div><div class="stat-sub">Unit tersedia</div></div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="g2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">📈 Tren Transaksi 7 Hari</div><div class="card-sub">Masuk vs keluar per hari</div></div></div>
+        <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">🏪 Distribusi Stok</div><div class="card-sub">Gudang vs Storing</div></div></div>
+        <div class="chart-wrap" style="display:flex;align-items:center;justify-content:center"><canvas id="chart-donut" style="max-height:200px;max-width:200px"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="g13">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">🕐 Aktivitas Terbaru</div><div class="card-sub">10 transaksi terakhir</div></div></div>
+        <div id="timeline-wrap" class="timeline"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">⚠️ Stok Kritis</div><div class="card-sub">Sisa &lt; 5 unit</div></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Barang</th><th>Stok</th><th>Status</th></tr></thead><tbody id="d-kritis"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MASTER BARANG ===== -->
+  <div id="page-master-barang" class="page">
+    <div class="ph"><div><h2>Data Master Barang</h2><p>Kelola data barang, part number & model kendaraan</p></div><span class="ph-icon">📦</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari ID, nama, part number..." id="q-barang" oninput="renderMasterBarang()">
+      <div class="date-filter">
+        <input class="date-input" type="date" id="df-barang-from" onchange="renderMasterBarang()">
+        <span style="color:var(--muted);font-size:12px">s/d</span>
+        <input class="date-input" type="date" id="df-barang-to" onchange="renderMasterBarang()">
+      </div>
+      <button class="btn btn-primary" onclick="openModal('m-barang')">+ Tambah Barang</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Daftar Barang</div><div class="card-sub" id="cnt-barang">0 barang</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Barang</th><th>Foto</th><th>Nama Barang</th><th>Part Number</th><th>Model</th><th>Stok Gudang</th><th>Stok Storing</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tb-barang"></tbody></table></div>
+      <div class="pagination" id="pag-barang"></div>
+    </div>
+  </div>
+
+  <!-- ===== MASTER SUPPLIER ===== -->
+  <div id="page-master-supplier" class="page">
+    <div class="ph"><div><h2>Data Supplier</h2><p>Kelola informasi supplier & vendor</p></div><span class="ph-icon">🏭</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari supplier..." id="q-supplier" oninput="renderSupplier()">
+      <button class="btn btn-primary" onclick="openModal('m-supplier')">+ Tambah Supplier</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Daftar Supplier</div><div class="card-sub" id="cnt-supplier">0 supplier</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID</th><th>Nama Supplier</th><th>Alamat</th><th>No. Telp</th><th>Status</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody id="tb-supplier"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ===== MASTER SATUAN ===== -->
+  <div id="page-master-satuan" class="page">
+    <div class="ph"><div><h2>Data Satuan</h2><p>Kelola satuan unit barang</p></div><span class="ph-icon">📏</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari satuan..." id="q-satuan" oninput="renderSatuan()">
+      <button class="btn btn-primary" onclick="openModal('m-satuan')">+ Tambah Satuan</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Daftar Satuan</div><div class="card-sub" id="cnt-satuan">0 satuan</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>No</th><th>Satuan</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody id="tb-satuan"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ===== BARANG MASUK ===== -->
+  <div id="page-inp-masuk" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#1A6B3A,var(--green))"><div><h2>Barang Masuk</h2><p>Input & riwayat penerimaan barang</p></div><span class="ph-icon">📥</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari transaksi masuk..." id="q-masuk" oninput="renderMasuk()">
+      <div class="date-filter"><input class="date-input" type="date" id="df-masuk-from" onchange="renderMasuk()"><span style="color:var(--muted);font-size:12px">s/d</span><input class="date-input" type="date" id="df-masuk-to" onchange="renderMasuk()"></div>
+      <button class="btn btn-primary" onclick="openModal('m-masuk')">📥 Input Masuk</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Riwayat Barang Masuk</div><div class="card-sub" id="cnt-masuk">0 transaksi</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Transaksi</th><th>Tanggal</th><th>Nama Barang</th><th>QTY</th><th>Satuan</th><th>Harga</th><th>Supplier</th><th>Penerima</th><th>Ket</th><th>Aksi</th></tr></thead><tbody id="tb-masuk"></tbody></table></div>
+      <div class="pagination" id="pag-masuk"></div>
+    </div>
+  </div>
+
+  <!-- ===== BARANG KELUAR ===== -->
+  <div id="page-inp-keluar" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#7B1C1C,var(--red))"><div><h2>Barang Keluar</h2><p>Input & riwayat pengeluaran barang</p></div><span class="ph-icon">📤</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari transaksi keluar..." id="q-keluar" oninput="renderKeluar()">
+      <div class="date-filter"><input class="date-input" type="date" id="df-keluar-from" onchange="renderKeluar()"><span style="color:var(--muted);font-size:12px">s/d</span><input class="date-input" type="date" id="df-keluar-to" onchange="renderKeluar()"></div>
+      <button class="btn btn-red" onclick="openModal('m-keluar')">📤 Input Keluar</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Riwayat Barang Keluar</div><div class="card-sub" id="cnt-keluar">0 transaksi</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID</th><th>Tgl</th><th>No.Lamb</th><th>KM</th><th>Barang</th><th>QTY</th><th>Sat</th><th>Mekanik</th><th>Lokasi</th><th>Penggunaan</th><th>Ket</th><th>Aksi</th></tr></thead><tbody id="tb-keluar"></tbody></table></div>
+      <div class="pagination" id="pag-keluar"></div>
+    </div>
+  </div>
+
+  <!-- ===== BARANG PINDAH ===== -->
+  <div id="page-inp-pindah" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#14366B,var(--blue))"><div><h2>Barang Pindah</h2><p>Perpindahan barang antar lokasi gudang</p></div><span class="ph-icon">🔄</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari transaksi pindah..." id="q-pindah" oninput="renderPindah()">
+      <button class="btn btn-primary" style="background:var(--blue)" onclick="openModal('m-pindah')">🔄 Input Pindah</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Riwayat Barang Pindah</div><div class="card-sub" id="cnt-pindah">0 transaksi</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID</th><th>Tanggal</th><th>Nama Barang</th><th>QTY</th><th>Satuan</th><th>Dari</th><th>Ke</th><th>Aksi</th></tr></thead><tbody id="tb-pindah"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ===== TRANSFER PART LIST ===== -->
+  <div id="page-inp-transfer" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#3B1D6E,var(--purple))"><div><h2>Transfer Part List</h2><p>Transfer suku cadang ke vendor/penerima</p></div><span class="ph-icon">📋</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari transfer..." id="q-transfer" oninput="renderTransfer()">
+      <button class="btn btn-primary" style="background:var(--purple)" onclick="openModal('m-transfer')">📋 Input Transfer</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Riwayat Transfer Part List</div><div class="card-sub" id="cnt-transfer">0 transaksi</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Transfer</th><th>Tanggal</th><th>Nama Barang</th><th>QTY</th><th>Satuan</th><th>Vendor</th><th>Penerima</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody id="tb-transfer"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ===== STOCK OPNAME ===== -->
+  <div id="page-inp-opname" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#5A3E00,var(--amber))"><div><h2>Stock Opname</h2><p>Penghitungan & verifikasi stok fisik barang</p></div><span class="ph-icon">🔍</span></div>
+    <div class="filter-bar">
+      <input class="search-box" placeholder="🔍  Cari barang..." id="q-opname" oninput="renderOpname()">
+      <button class="btn btn-ghost" onclick="resetOpname()">🔄 Reset</button>
+      <button class="btn btn-primary" style="background:var(--amber)" onclick="saveOpname()">💾 Simpan Opname</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Data Stock Opname</div><div class="card-sub">Input stok fisik aktual per barang</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Barang</th><th>Nama Barang</th><th>Part No</th><th>Stok Sistem</th><th>Stok Fisik (Input)</th><th>Selisih</th><th>Status</th></tr></thead><tbody id="tb-opname"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ===== LAPORAN REKAP ===== -->
+  <div id="page-lap-rekap" class="page">
+    <div class="ph"><div><h2>Laporan Rekapitulasi Stok</h2><p>Ringkasan stok masuk, keluar & sisa per lokasi</p></div><span class="ph-icon">📈</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div class="chip-group" id="chip-lokasi" style="margin:0">
+        <div class="chip active" onclick="setLokasi('Semua',this)">Semua</div>
+        <div class="chip" onclick="setLokasi('Gudang',this)">Gudang</div>
+        <div class="chip" onclick="setLokasi('Storing',this)">Storing</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Cetak</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇️ CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportPDF()">📄 PDF</button>
+      </div>
+    </div>
+    <div class="rpt-summary">
+      <div class="rpt-item"><div class="rpt-label">Stok Awal</div><div class="rpt-val rv-b" id="r-awal">0</div></div>
+      <div class="rpt-item"><div class="rpt-label">Barang Masuk</div><div class="rpt-val rv-g" id="r-masuk">0</div></div>
+      <div class="rpt-item"><div class="rpt-label">Barang Keluar</div><div class="rpt-val rv-r" id="r-keluar">0</div></div>
+      <div class="rpt-item"><div class="rpt-label">Sisa Stok</div><div class="rpt-val rv-p" id="r-sisa">0</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Tabel Rekapitulasi</div><div class="card-sub" id="r-loksub">Semua lokasi</div></div></div>
+      <div class="table-wrap"><table id="tb-rekap-table"><thead><tr><th>#</th><th>ID Barang</th><th>Nama Barang</th><th>Part Number</th><th>Model</th><th>Satuan</th><th>Stok Awal</th><th>Masuk</th><th>Keluar</th><th>Sisa Stok</th><th>Status</th></tr></thead><tbody id="tb-rekap"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ===== LAPORAN OPNAME ===== -->
+  <div id="page-lap-opname" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#5A3E00,var(--amber))"><div><h2>Laporan Hasil Stock Opname</h2><p>Perbandingan stok sistem vs stok fisik</p></div><span class="ph-icon">📑</span></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Cetak</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportOpnameCSV()">⬇️ CSV</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--amber)" onclick="exportOpnamePDF()">📄 PDF</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Hasil Stock Opname</div><div class="card-sub">Perbandingan stok sistem vs fisik</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Barang</th><th>Nama Barang</th><th>Part No</th><th>Stok Sistem</th><th>Stok Fisik</th><th>Selisih</th><th>Keterangan</th><th>Status</th></tr></thead><tbody id="tb-lap-opname"></tbody></table></div>
+    </div>
+  </div>
+
+</div><!-- end content -->
+
+<!-- ====== GLOBAL SEARCH ====== -->
+<div id="gsearch-overlay" onclick="closeGSearch(event)">
+  <div class="gsearch-box">
+    <div class="gsearch-input-wrap">
+      <span class="gsearch-icon">🔍</span>
+      <input class="gsearch-input" id="gsearch-input" placeholder="Cari barang, supplier, transaksi..." oninput="runGSearch()">
+      <span class="gsearch-kbd">ESC</span>
+    </div>
+    <div class="gsearch-results" id="gsearch-results">
+      <div class="gs-empty">Ketik untuk mencari...</div>
+    </div>
+    <div class="gs-hint">
+      <div class="gs-hint-item">⏎ Buka</div>
+      <div class="gs-hint-item">↑↓ Navigasi</div>
+      <div class="gs-hint-item">ESC Tutup</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== CONFIRM MODAL ====== -->
+<div id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-head">
+      <span class="confirm-ico">🗑️</span>
+      <div class="confirm-title" id="confirm-title">Hapus Data?</div>
+      <div class="confirm-msg" id="confirm-msg">Data yang dihapus tidak dapat dikembalikan.</div>
+    </div>
+    <div class="confirm-foot">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Batal</button>
+      <button class="btn btn-red" id="confirm-ok-btn">🗑️ Ya, Hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== QR CODE MODAL ====== -->
+<div class="modal-overlay" id="m-qr">
+  <div class="modal sm">
+    <div class="modal-head">
+      <div style="display:flex;align-items:center;gap:10px"><div class="modal-ico g">📷</div><div><div class="modal-title">QR Code Barang</div><div class="modal-sub" id="qr-nama-title">—</div></div></div>
+      <button class="btn-x" onclick="closeModal('m-qr')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="qr-box"><div id="qr-container"></div><div class="qr-label" id="qr-label">—</div></div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-ghost btn-sm" onclick="downloadQR()">⬇️ Download QR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== MODALS DATA ====== -->
+<!-- Barang -->
+<div class="modal-overlay" id="m-barang">
+  <div class="modal">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico g">📦</div><div><div class="modal-title">Tambah Data Barang</div><div class="modal-sub">Input master data barang baru</div></div></div><button class="btn-x" onclick="closeModal('m-barang')">✕</button></div>
+    <div class="modal-body">
+      <div class="fr"><div class="fg"><label class="fl">ID Barang *</label><input class="fc" id="b-id" placeholder="cth: BRG-001"></div><div class="fg"><label class="fl">Nama Barang *</label><input class="fc" id="b-nama" placeholder="Nama lengkap barang"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Part Number *</label><input class="fc" id="b-part" placeholder="cth: PN-12345"></div><div class="fg"><label class="fl">Model Kendaraan</label><input class="fc" id="b-model" placeholder="cth: Toyota Avanza"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Stok Awal Gudang</label><input class="fc" id="b-stok-g" type="number" min="0" value="0"></div><div class="fg"><label class="fl">Stok Awal Storing</label><input class="fc" id="b-stok-s" type="number" min="0" value="0"></div></div>
+      <div class="fg"><label class="fl">Foto Barang</label><div class="foto-upload-zone" onclick="document.getElementById('foto-input').click()"><span>🖼️</span><span>Klik untuk upload foto</span></div><input type="file" id="foto-input" accept="image/*" style="display:none" onchange="previewFoto(event)"><img id="foto-preview-img" class="foto-preview" style="display:none;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-barang')">Batal</button><button class="btn btn-primary" onclick="saveBarang()">💾 Simpan Barang</button></div>
+  </div>
+</div>
+<!-- Supplier -->
+<div class="modal-overlay" id="m-supplier">
+  <div class="modal">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico b">🏭</div><div><div class="modal-title">Tambah Supplier</div><div class="modal-sub">Input data supplier/vendor</div></div></div><button class="btn-x" onclick="closeModal('m-supplier')">✕</button></div>
+    <div class="modal-body">
+      <div class="fr"><div class="fg"><label class="fl">ID Supplier *</label><input class="fc" id="s-id" placeholder="cth: SUP-001"></div><div class="fg"><label class="fl">Nama Supplier *</label><input class="fc" id="s-nama" placeholder="Nama perusahaan"></div></div>
+      <div class="fg"><label class="fl">Alamat</label><textarea class="fc" id="s-alamat" placeholder="Alamat lengkap supplier"></textarea></div>
+      <div class="fr"><div class="fg"><label class="fl">No. Telepon</label><input class="fc" id="s-telp" placeholder="cth: 021-1234567"></div><div class="fg"><label class="fl">Status</label><select class="fc" id="s-status"><option value="Aktif">Aktif</option><option value="Tidak Aktif">Tidak Aktif</option></select></div></div>
+      <div class="fg"><label class="fl">Keterangan</label><input class="fc" id="s-ket" placeholder="Catatan tambahan"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-supplier')">Batal</button><button class="btn btn-primary" onclick="saveSupplier()">💾 Simpan</button></div>
+  </div>
+</div>
+<!-- Satuan -->
+<div class="modal-overlay" id="m-satuan">
+  <div class="modal sm">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico a">📏</div><div><div class="modal-title">Tambah Satuan</div></div></div><button class="btn-x" onclick="closeModal('m-satuan')">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label class="fl">Nama Satuan *</label><input class="fc" id="sat-nama" placeholder="cth: Pcs, Set, Liter, Meter..."></div>
+      <div class="fg"><label class="fl">Keterangan</label><input class="fc" id="sat-ket" placeholder="Keterangan satuan"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-satuan')">Batal</button><button class="btn btn-primary" onclick="saveSatuan()">💾 Simpan</button></div>
+  </div>
+</div>
+<!-- Masuk -->
+<div class="modal-overlay" id="m-masuk">
+  <div class="modal lg">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico g">📥</div><div><div class="modal-title">Input Barang Masuk</div><div class="modal-sub">Catat penerimaan barang ke gudang</div></div></div><button class="btn-x" onclick="closeModal('m-masuk')">✕</button></div>
+    <div class="modal-body">
+      <div class="fr"><div class="fg"><label class="fl">ID Transaksi</label><input class="fc" id="mk-id" readonly></div><div class="fg"><label class="fl">Tanggal *</label><input class="fc" id="mk-tgl" type="date"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Nama Barang *</label><select class="fc" id="mk-barang" onchange="fillBarang('mk')"><option value="">-- Pilih Barang --</option></select></div><div class="fg"><label class="fl">Part Number</label><input class="fc" id="mk-part" readonly></div></div>
+      <div class="fr3"><div class="fg"><label class="fl">QTY *</label><input class="fc" id="mk-qty" type="number" min="1" placeholder="0"></div><div class="fg"><label class="fl">Satuan *</label><select class="fc" id="mk-satuan"><option value="">-- Satuan --</option></select></div><div class="fg"><label class="fl">Harga (Rp)</label><input class="fc" id="mk-harga" type="number" min="0" placeholder="0"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Supplier</label><select class="fc" id="mk-supplier"><option value="">-- Pilih Supplier --</option></select></div><div class="fg"><label class="fl">Penerima</label><input class="fc" id="mk-penerima" placeholder="Nama penerima barang"></div></div>
+      <div class="fg"><label class="fl">Keterangan</label><input class="fc" id="mk-ket" placeholder="Catatan tambahan"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-masuk')">Batal</button><button class="btn btn-primary" onclick="saveMasuk()">📥 Simpan Masuk</button></div>
+  </div>
+</div>
+<!-- Keluar -->
+<div class="modal-overlay" id="m-keluar">
+  <div class="modal lg">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico r">📤</div><div><div class="modal-title">Input Barang Keluar</div><div class="modal-sub">Catat pengeluaran barang dari gudang</div></div></div><button class="btn-x" onclick="closeModal('m-keluar')">✕</button></div>
+    <div class="modal-body">
+      <div class="fr"><div class="fg"><label class="fl">ID Transaksi</label><input class="fc" id="kl-id" readonly></div><div class="fg"><label class="fl">Tanggal *</label><input class="fc" id="kl-tgl" type="date"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">No. Lambung</label><input class="fc" id="kl-lamb" placeholder="Nomor lambung kendaraan"></div><div class="fg"><label class="fl">Kilometer</label><input class="fc" id="kl-km" type="number" placeholder="KM saat ini"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Nama Barang *</label><select class="fc" id="kl-barang" onchange="fillBarang('kl')"><option value="">-- Pilih Barang --</option></select></div><div class="fg"><label class="fl">Part Number</label><input class="fc" id="kl-part" readonly></div></div>
+      <div class="fr3"><div class="fg"><label class="fl">QTY *</label><input class="fc" id="kl-qty" type="number" min="1" placeholder="0"></div><div class="fg"><label class="fl">Satuan *</label><select class="fc" id="kl-satuan"><option value="">-- Satuan --</option></select></div><div class="fg"><label class="fl">Lokasi Stok</label><select class="fc" id="kl-stok"><option value="Gudang">Gudang</option><option value="Storing">Storing</option></select></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Mekanik</label><select class="fc" id="kl-mekanik"><option value="">-- Pilih Mekanik --</option><option>Mekanik 1 - Budi</option><option>Mekanik 2 - Anton</option><option>Mekanik 3 - Rudi</option><option>Mekanik 4 - Slamet</option></select></div><div class="fg"><label class="fl">Penggunaan</label><select class="fc" id="kl-guna"><option value="Breakdown">Breakdown</option><option value="Daily Check">Daily Check</option><option value="On The Spot Repair">On The Spot Repair</option></select></div></div>
+      <div class="fg"><label class="fl">Keterangan</label><input class="fc" id="kl-ket" placeholder="Catatan tambahan"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-keluar')">Batal</button><button class="btn btn-red" onclick="saveKeluar()">📤 Simpan Keluar</button></div>
+  </div>
+</div>
+<!-- Pindah -->
+<div class="modal-overlay" id="m-pindah">
+  <div class="modal">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico b">🔄</div><div><div class="modal-title">Input Barang Pindah</div><div class="modal-sub">Pindahkan barang antar lokasi</div></div></div><button class="btn-x" onclick="closeModal('m-pindah')">✕</button></div>
+    <div class="modal-body">
+      <div class="fr"><div class="fg"><label class="fl">ID Transaksi</label><input class="fc" id="pd-id" readonly></div><div class="fg"><label class="fl">Tanggal *</label><input class="fc" id="pd-tgl" type="date"></div></div>
+      <div class="fg"><label class="fl">Nama Barang *</label><select class="fc" id="pd-barang" onchange="fillBarang('pd')"><option value="">-- Pilih Barang --</option></select></div>
+      <div class="fr3"><div class="fg"><label class="fl">QTY *</label><input class="fc" id="pd-qty" type="number" min="1" placeholder="0"></div><div class="fg"><label class="fl">Satuan</label><select class="fc" id="pd-satuan"><option value="">-- Satuan --</option></select></div><div class="fg"></div></div>
+      <div class="fr"><div class="fg"><label class="fl">Dari *</label><select class="fc" id="pd-dari"><option value="Gudang">Gudang</option><option value="Storing">Storing</option></select></div><div class="fg"><label class="fl">Ke *</label><select class="fc" id="pd-ke"><option value="Storing">Storing</option><option value="Gudang">Gudang</option></select></div></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-pindah')">Batal</button><button class="btn btn-primary" style="background:var(--blue)" onclick="savePindah()">🔄 Simpan Pindah</button></div>
+  </div>
+</div>
+<!-- Transfer -->
+<div class="modal-overlay" id="m-transfer">
+  <div class="modal lg">
+    <div class="modal-head"><div style="display:flex;align-items:center;gap:10px"><div class="modal-ico p">📋</div><div><div class="modal-title">Input Transfer Part List</div><div class="modal-sub">Transfer suku cadang ke vendor/penerima</div></div></div><button class="btn-x" onclick="closeModal('m-transfer')">✕</button></div>
+    <div class="modal-body">
+      <div class="fr"><div class="fg"><label class="fl">ID Transfer</label><input class="fc" id="tf-id" readonly></div><div class="fg"><label class="fl">Tanggal *</label><input class="fc" id="tf-tgl" type="date"></div></div>
+      <div class="fg"><label class="fl">Nama Barang *</label><select class="fc" id="tf-barang" onchange="fillBarang('tf')"><option value="">-- Pilih Barang --</option></select></div>
+      <div class="fr3"><div class="fg"><label class="fl">QTY *</label><input class="fc" id="tf-qty" type="number" min="1" placeholder="0"></div><div class="fg"><label class="fl">Satuan</label><select class="fc" id="tf-satuan"><option value="">-- Satuan --</option></select></div><div class="fg"><label class="fl">Vendor</label><input class="fc" id="tf-vendor" placeholder="Nama vendor/bengkel"></div></div>
+      <div class="fg"><label class="fl">Penerima</label><input class="fc" id="tf-penerima" placeholder="Nama penerima transfer"></div>
+      <div class="fg"><label class="fl">Keterangan</label><input class="fc" id="tf-ket" placeholder="Catatan transfer"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('m-transfer')">Batal</button><button class="btn btn-primary" style="background:var(--purple)" onclick="saveTransfer()">📋 Simpan Transfer</button></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+<script src="app-supabase.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "StockPro — Manajemen Gudang",
+  "short_name": "StockPro",
+  "description": "Sistem Manajemen Gudang modern untuk Android & iOS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#004F35",
+  "theme_color": "#00704A",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "id",
+  "icons": [
+    { "src": "/icons/icon-72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-128.png",  "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-144.png",  "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-152.png",  "sizes": "152x152", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-192.png",  "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-384.png",  "sizes": "384x384", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "screenshots": [
+    { "src": "/screenshots/dashboard.png", "sizes": "1280x720", "type": "image/png", "label": "Dashboard StockPro" },
+    { "src": "/screenshots/mobile.png",    "sizes": "390x844",  "type": "image/png", "label": "Mobile View" }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "shortcuts": [
+    { "name": "Barang Masuk",  "short_name": "Masuk",  "url": "/?page=inp-masuk",  "icons": [{"src": "/icons/icon-96.png", "sizes": "96x96"}] },
+    { "name": "Barang Keluar", "short_name": "Keluar", "url": "/?page=inp-keluar", "icons": [{"src": "/icons/icon-96.png", "sizes": "96x96"}] },
+    { "name": "Laporan",       "short_name": "Laporan","url": "/?page=lap-rekap",  "icons": [{"src": "/icons/icon-96.png", "sizes": "96x96"}] }
+  ]
+}
