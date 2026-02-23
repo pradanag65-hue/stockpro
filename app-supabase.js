@@ -80,7 +80,8 @@ async function checkSession() {
 async function loadAllData() {
   showLoading(true);
   try {
-    const [barang, supplier, satuan, masuk, keluar, pindah, transfer] = await Promise.all([
+    const todayStr = today();
+    const [barang, supplier, satuan, masuk, keluar, pindah, transfer, opnameRows] = await Promise.all([
       sbGet('stok_realtime', { order: 'id' }),
       sbGet('supplier', { order: 'id' }),
       sbGet('satuan', { order: 'nama' }),
@@ -88,6 +89,10 @@ async function loadAllData() {
       sbGet('barang_keluar', { order: 'created_at', asc: false }),
       sbGet('barang_pindah', { order: 'created_at', asc: false }),
       sbGet('transfer_part', { order: 'created_at', asc: false }),
+      (async () => {
+        const { data } = await sb.from('stock_opname').select('*').eq('tanggal', todayStr);
+        return data || [];
+      })()
     ]);
     DB.barang   = barang;
     DB.supplier = supplier;
@@ -96,6 +101,8 @@ async function loadAllData() {
     DB.keluar   = keluar;
     DB.pindah   = pindah;
     DB.transfer = transfer;
+    DB.opname = {};
+    opnameRows.forEach(o => { DB.opname[o.barang_id] = o.stok_fisik; });
   } catch(e) {
     toast('Gagal memuat data: ' + e.message, 'err');
   } finally {
@@ -491,12 +498,28 @@ async function saveTransfer() {
   }catch(e){toast(e.message,'err');}
 }
 async function saveOpname() {
-  const inputs=document.querySelectorAll('.opname-input');const items=[];
-  inputs.forEach(inp=>{const bid=inp.dataset.id,val=parseInt(inp.value);if(!isNaN(val)&&val>=0){const s=getStok(bid);items.push({barang_id:bid,stok_fisik:val,stok_sistem:s.gudang+s.storing,tanggal:today(),created_by:SESSION?.user?.id});}});
-  if(!items.length){toast('Belum ada data opname','warn');return;}
+  const inputs=document.querySelectorAll('.opname-input');
+  const items=[];
+  inputs.forEach(inp=>{
+    const bid=inp.dataset.id, val=parseInt(inp.value);
+    if(!isNaN(val) && val>=0 && inp.value!=='') {
+      const s=getStok(bid);
+      items.push({barang_id:bid, stok_fisik:val, stok_sistem:s.gudang+s.storing, tanggal:today(), created_by:SESSION?.user?.id});
+    }
+  });
+  if(!items.length){toast('Belum ada stok fisik yang diisi','warn');return;}
+  const btn=document.querySelector('[onclick="saveOpname()"]');
+  if(btn){btn.textContent='⏳ Menyimpan...';btn.disabled=true;}
   const{error}=await sb.from('stock_opname').upsert(items,{onConflict:'barang_id,tanggal'});
+  if(btn){btn.textContent='💾 Simpan Opname';btn.disabled=false;}
   if(error){toast(error.message,'err');return;}
-  toast(`Opname ${items.length} barang disimpan`);
+  // Reload dan refresh
+  const todayStr=today();
+  const{data:fresh}=await sb.from('stock_opname').select('*').eq('tanggal',todayStr);
+  DB.opname={};
+  (fresh||[]).forEach(o=>{DB.opname[o.barang_id]=o.stok_fisik;});
+  renderOpname();
+  toast('✅ Opname '+items.length+' barang berhasil disimpan!');
 }
 
 // ============================================================
@@ -560,12 +583,67 @@ function renderMasuk(){const q=(document.getElementById('q-masuk')?.value||'').t
 function renderKeluar(){const q=(document.getElementById('q-keluar')?.value||'').toLowerCase();let f=filterByDate(DB.keluar,'df-keluar-from','df-keluar-to').filter(k=>(k.nama_barang||k.namaBrg||'').toLowerCase().includes(q)||k.id.toLowerCase().includes(q)).sort((a,b)=>b.id.localeCompare(a.id));document.getElementById('cnt-keluar').textContent=`${f.length} transaksi`;const paged=paginate(f,'keluar');document.getElementById('tb-keluar').innerHTML=paged.length===0?`<tr><td colspan="13"><div class="empty"><span class="empty-ico">📭</span><p>Belum ada barang keluar</p></div></td></tr>`:paged.map((k,i)=>`<tr><td style="color:var(--muted)">${(PAG.keluar.p-1)*PAG.keluar.pp+i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(k.id)}</td><td style="color:var(--muted)">${k.tanggal||k.tgl}</td><td>${esc(k.no_lambung||k.lamb||'—')}</td><td style="font-family:var(--mono)">${k.kilometer||k.km?fmt(k.kilometer||k.km)+' km':'—'}</td><td><strong>${esc(k.nama_barang||k.namaBrg)}</strong></td><td style="font-family:var(--mono);font-weight:800;color:var(--red)">-${fmt(k.qty)}</td><td style="color:var(--muted)">${esc(k.satuan)}</td><td>${esc(k.mekanik||'—')}</td><td><span class="badge bg-blue">${k.lokasi_stok||k.stok}</span></td><td><span class="badge bg-gray" style="font-size:10px">${esc(k.penggunaan||k.guna)}</span></td><td style="color:var(--muted)">${esc(k.keterangan||k.ket||'—')}</td><td><button class="btn btn-red btn-sm btn-icon" onclick="deleteItem('keluar','${k.id}','${esc(k.nama_barang||k.namaBrg)}')">🗑️</button></td></tr>`).join('');renderPag('pag-keluar',f,'keluar');updateBadges();}
 function renderPindah(){const q=(document.getElementById('q-pindah')?.value||'').toLowerCase();const f=DB.pindah.filter(p=>(p.nama_barang||p.namaBrg||'').toLowerCase().includes(q)||p.id.toLowerCase().includes(q)).sort((a,b)=>b.id.localeCompare(a.id));document.getElementById('cnt-pindah').textContent=`${f.length} transaksi`;document.getElementById('tb-pindah').innerHTML=f.length===0?`<tr><td colspan="9"><div class="empty"><span class="empty-ico">📭</span><p>Belum ada pindah</p></div></td></tr>`:f.map((p,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(p.id)}</td><td style="color:var(--muted)">${p.tanggal||p.tgl}</td><td><strong>${esc(p.nama_barang||p.namaBrg)}</strong></td><td style="font-family:var(--mono)">${fmt(p.qty)}</td><td style="color:var(--muted)">${esc(p.satuan)}</td><td><span class="badge bg-red">${p.dari}</span></td><td><span class="badge bg-green">${p.ke}</span></td><td><button class="btn btn-red btn-sm btn-icon" onclick="deleteItem('pindah','${p.id}','${esc(p.nama_barang||p.namaBrg)}')">🗑️</button></td></tr>`).join('');}
 function renderTransfer(){const q=(document.getElementById('q-transfer')?.value||'').toLowerCase();const f=DB.transfer.filter(t=>(t.nama_barang||t.namaBrg||'').toLowerCase().includes(q)||t.id.toLowerCase().includes(q)).sort((a,b)=>b.id.localeCompare(a.id));document.getElementById('cnt-transfer').textContent=`${f.length} transaksi`;document.getElementById('tb-transfer').innerHTML=f.length===0?`<tr><td colspan="10"><div class="empty"><span class="empty-ico">📭</span><p>Belum ada transfer</p></div></td></tr>`:f.map((t,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(t.id)}</td><td style="color:var(--muted)">${t.tanggal||t.tgl}</td><td><strong>${esc(t.nama_barang||t.namaBrg)}</strong></td><td style="font-family:var(--mono)">${fmt(t.qty)}</td><td style="color:var(--muted)">${esc(t.satuan)}</td><td>${esc(t.vendor||'—')}</td><td>${esc(t.penerima||'—')}</td><td style="color:var(--muted)">${esc(t.keterangan||t.ket||'—')}</td><td><button class="btn btn-red btn-sm btn-icon" onclick="deleteItem('transfer','${t.id}','${esc(t.nama_barang||t.namaBrg)}')">🗑️</button></td></tr>`).join('');}
-function renderOpname(){const q=(document.getElementById('q-opname')?.value||'').toLowerCase();const f=DB.barang.filter(b=>b.nama.toLowerCase().includes(q)||b.id.toLowerCase().includes(q));document.getElementById('tb-opname').innerHTML=f.length===0?`<tr><td colspan="8"><div class="empty"><span class="empty-ico">📭</span><p>Tambah barang terlebih dahulu</p></div></td></tr>`:f.map((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'',selisih=fisik!==''?fisik-sistem:'',st=selisih===''?'<span class="badge bg-gray">Belum</span>':selisih===0?'<span class="badge bg-green">Sesuai</span>':selisih>0?'<span class="badge bg-blue">Lebih</span>':'<span class="badge bg-red">Kurang</span>';return`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(b.id)}</td><td><strong>${esc(b.nama)}</strong></td><td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td><td style="font-family:var(--mono);font-weight:700">${fmt(sistem)}</td><td><input class="opname-input" type="number" min="0" data-id="${b.id}" value="${fisik}" placeholder="0" oninput="liveSelisih(this,${sistem})"></td><td id="sel-${b.id}" style="font-family:var(--mono);font-weight:800">${selisih!==''?(selisih>=0?'+':'')+fmt(selisih):'—'}</td><td>${st}</td></tr>`;}).join('');}
-function liveSelisih(inp,sistem){const bid=inp.dataset.id,fisik=parseInt(inp.value),el=document.getElementById('sel-'+bid);if(isNaN(fisik)||!el)return;const diff=fisik-sistem;el.textContent=(diff>=0?'+':'')+fmt(diff);el.style.color=diff<0?'var(--red)':diff>0?'var(--blue)':'var(--green)';}
+function renderOpname() {
+  const q=(document.getElementById('q-opname')?.value||'').toLowerCase();
+  const f=DB.barang.filter(b=>b.nama.toLowerCase().includes(q)||b.id.toLowerCase().includes(q));
+  document.getElementById('tb-opname').innerHTML=f.length===0
+    ?`<tr><td colspan="8"><div class="empty"><span class="empty-ico">📭</span><p>Tambah barang terlebih dahulu</p></div></td></tr>`
+    :f.map((b,i)=>{
+      const s=getStok(b.id),sistem=s.gudang+s.storing;
+      const fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'';
+      const selisih=fisik!==''?fisik-sistem:'';
+      const stBadge=selisih===''
+        ?'<span class="badge bg-gray">Belum</span>'
+        :selisih===0?'<span class="badge bg-green">✅ Sesuai</span>'
+        :selisih>0?'<span class="badge bg-blue">📈 Lebih</span>'
+        :'<span class="badge bg-red">📉 Kurang</span>';
+      const selText=selisih!==''?(selisih>=0?'+':'')+fmt(selisih):'—';
+      const selColor=selisih===''?'var(--muted)':selisih<0?'var(--red)':selisih>0?'var(--blue)':'var(--green)';
+      return `<tr>
+        <td style="color:var(--muted)">${i+1}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(b.id)}</td>
+        <td><strong>${esc(b.nama)}</strong></td>
+        <td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td>
+        <td style="font-family:var(--mono);font-weight:700">${fmt(sistem)}</td>
+        <td><input class="opname-input" type="number" min="0" data-id="${b.id}" value="${fisik}" placeholder="Isi jumlah fisik" oninput="liveSelisih(this,${sistem})" style="width:120px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:13px;font-weight:700;text-align:center"></td>
+        <td id="sel-${b.id}" style="font-family:var(--mono);font-weight:800;color:${selColor}">${selText}</td>
+        <td id="st-${b.id}">${stBadge}</td>
+      </tr>`;
+    }).join('');
+}
+function liveSelisih(inp,sistem) {
+  const bid=inp.dataset.id;
+  const fisik=parseInt(inp.value);
+  const elSel=document.getElementById('sel-'+bid);
+  const elSt=document.getElementById('st-'+bid);
+  if(isNaN(fisik)) return;
+  // Update selisih
+  const diff=fisik-sistem;
+  if(elSel){elSel.textContent=(diff>=0?'+':'')+fmt(diff);elSel.style.color=diff<0?'var(--red)':diff>0?'var(--blue)':'var(--green)';}
+  // Update status badge live
+  if(elSt){
+    elSt.innerHTML=diff===0
+      ?'<span class="badge bg-green">✅ Sesuai</span>'
+      :diff>0?'<span class="badge bg-blue">📈 Lebih</span>'
+      :'<span class="badge bg-red">📉 Kurang</span>';
+  }
+  // Simpan ke DB.opname sementara (untuk preview)
+  DB.opname[bid]=fisik;
+}
 
 let rekapLok='Semua';
 function setLokasi(lok,el){rekapLok=lok;document.querySelectorAll('#chip-lokasi .chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderRekap();}
 function renderRekap(){document.getElementById('r-loksub').textContent=rekapLok==='Semua'?'Semua lokasi':'Lokasi: '+rekapLok;let tA=0,tM=0,tK=0,tS=0;const rows=DB.barang.map((b,i)=>{const stok=getStok(b.id),stokAwal=(rekapLok==='Gudang'?b.stok_gudang:rekapLok==='Storing'?b.stok_storing:(b.stok_gudang||0)+(b.stok_storing||0))||0,masuk=DB.masuk.filter(m=>m.barang_id===b.id&&(rekapLok==='Semua'||m.lokasi===rekapLok)).reduce((a,c)=>a+c.qty,0),keluar=DB.keluar.filter(k=>k.barang_id===b.id&&(rekapLok==='Semua'||k.lokasi_stok===rekapLok)).reduce((a,c)=>a+c.qty,0),sisa=rekapLok==='Gudang'?stok.gudang:rekapLok==='Storing'?stok.storing:stok.gudang+stok.storing,st=sisa===0?'bg-red':sisa<5?'bg-amber':'bg-green';tA+=stokAwal;tM+=masuk;tK+=keluar;tS+=sisa;return`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(b.id)}</td><td><strong>${esc(b.nama)}</strong></td><td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td><td style="color:var(--muted)">${esc(b.model||'—')}</td><td style="color:var(--muted)">—</td><td style="font-family:var(--mono)">${fmt(stokAwal)}</td><td style="font-family:var(--mono);font-weight:800;color:var(--green)">+${fmt(masuk)}</td><td style="font-family:var(--mono);font-weight:800;color:var(--red)">-${fmt(keluar)}</td><td style="font-family:var(--mono);font-size:15px;font-weight:800">${fmt(sisa)}</td><td><span class="badge ${st}">${sisa===0?'Habis':sisa<5?'Kritis':'Aman'}</span></td></tr>`;});countUp(document.getElementById('r-awal'),tA);countUp(document.getElementById('r-masuk'),tM);countUp(document.getElementById('r-keluar'),tK);countUp(document.getElementById('r-sisa'),tS);document.getElementById('tb-rekap').innerHTML=rows.length===0?`<tr><td colspan="11"><div class="empty"><span class="empty-ico">📋</span><p>Belum ada data</p></div></td></tr>`:rows.join('');}
+function resetOpname() {
+  showConfirm('Reset Opname?', 'Semua input stok fisik hari ini akan dihapus.', async () => {
+    const todayStr = today();
+    await sb.from('stock_opname').delete().eq('tanggal', todayStr);
+    DB.opname = {};
+    renderOpname();
+    toast('Data opname hari ini direset', 'warn');
+  });
+}
+
 function renderLapOpname(){const rows=DB.barang.map((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:null,selisih=fisik!==null?fisik-sistem:null,st=fisik===null?'<span class="badge bg-gray">Belum</span>':selisih===0?'<span class="badge bg-green">Sesuai</span>':selisih>0?'<span class="badge bg-blue">Lebih</span>':'<span class="badge bg-red">Kurang</span>';return`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(b.id)}</td><td><strong>${esc(b.nama)}</strong></td><td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td><td style="font-family:var(--mono)">${fmt(sistem)}</td><td style="font-family:var(--mono)">${fisik!==null?fmt(fisik):'—'}</td><td style="font-family:var(--mono);font-weight:800;color:${selisih<0?'var(--red)':selisih>0?'var(--blue)':'var(--green)'}">${selisih!==null?(selisih>=0?'+':'')+fmt(selisih):'—'}</td><td style="color:var(--muted);font-size:12px">${selisih!==null&&selisih!==0?(selisih>0?'Kelebihan':'Kekurangan'):''}</td><td>${st}</td></tr>`;});document.getElementById('tb-lap-opname').innerHTML=rows.length===0?`<tr><td colspan="9"><div class="empty"><span class="empty-ico">📑</span><p>Lakukan opname terlebih dahulu</p></div></td></tr>`:rows.join('');}
 
 // Export tetap sama
