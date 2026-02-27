@@ -20,7 +20,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ============================================================
 let SESSION = null;
 let DB = { barang:[], supplier:[], satuan:[], masuk:[], keluar:[], pindah:[], transfer:[], opname:{} };
-const PAG = { barang:{p:1,pp:15}, masuk:{p:1,pp:15}, keluar:{p:1,pp:15} };
+const PAG = { barang:{p:1,pp:100}, masuk:{p:1,pp:100}, keluar:{p:1,pp:100} };
 
 // ============================================================
 // SUPABASE DIRECT — tidak butuh backend Railway
