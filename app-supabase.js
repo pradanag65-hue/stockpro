@@ -1070,26 +1070,36 @@ async function submitImport() {
   });
 
   try {
-    // Upsert dengan batch 50 baris
     const batchSize = 50;
     let imported = 0;
+    let skipped = 0;
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
       const { error } = await sb.from(table).upsert(batch, { onConflict: 'id' });
-      if (error) throw new Error(error.message);
-      imported += batch.length;
+      if (error) {
+        console.error('[Import] Batch error:', error.message);
+        // Fallback: insert satu per satu
+        for (const row of batch) {
+          const { error: e2 } = await sb.from(table).upsert([row], { onConflict: 'id' });
+          if (e2) { console.warn('[Import] Skip:', row.id, e2.message); skipped++; }
+          else imported++;
+        }
+      } else {
+        imported += batch.length;
+      }
     }
     closeModal('m-import');
     await loadAllData();
-    // Refresh halaman yang sedang aktif
     const R = {
       barang:renderMasterBarang, supplier:renderSupplier, satuan:renderSatuan,
       masuk:renderMasuk, keluar:renderKeluar, pindah:renderPindah, transfer:renderTransfer
     };
     if (R[currentImportType]) R[currentImportType]();
     renderDashboard();
-    toast(`✅ Berhasil import ${imported} data ${currentImportType}`);
+    const skipMsg = skipped > 0 ? `, ${skipped} dilewati` : '';
+    toast(`✅ Berhasil import ${imported} data${skipMsg}`);
   } catch(e) {
+    console.error('[Import] Fatal:', e);
     toast('Import gagal: ' + e.message, 'err');
     btn.textContent = `📥 Import ${importValidRows.length} Data`;
     btn.disabled = false;
