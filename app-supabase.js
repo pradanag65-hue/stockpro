@@ -979,7 +979,7 @@ function parseImportRows(rows) {
     }
 
     // Validasi required
-    const missing = cfg.required.filter(k => !obj[k] || obj[k] === '0' && k !== 'qty');
+    const missing = cfg.required.filter(k => (!obj[k] || obj[k] === '0') && k !== 'qty');
     if (missing.length) {
       errors.push(`Baris ${i+2}: kolom "${missing.join(', ')}" wajib diisi`);
       obj._error = true;
