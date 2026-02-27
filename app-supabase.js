@@ -941,7 +941,16 @@ function parseImportRows(rows) {
   if (rows.length < 2) { toast('File kosong atau hanya ada header', 'warn'); return; }
 
   // Skip baris pertama (header)
-  const dataRows = rows.slice(1).filter(r => r.some(c => c !== ''));
+  // Abaikan baris yang seluruhnya kosong ATAU semua kolom required-nya kosong
+  const dataRows = rows.slice(1).filter(r => {
+    if (!r.some(c => c !== '')) return false; // baris kosong total
+    // Cek apakah semua kolom required kosong
+    const allRequiredEmpty = cfg.required.every(k => {
+      const ki = cfg.keys.indexOf(k);
+      return ki === -1 || !r[ki] || String(r[ki]).trim() === '';
+    });
+    return !allRequiredEmpty;
+  });
   importRows = [];
   importValidRows = [];
   const errors = [];
