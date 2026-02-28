@@ -1073,16 +1073,39 @@ async function submitImport() {
     const batchSize = 50;
     let imported = 0;
     let skipped = 0;
-    // Tabel satuan tidak punya kolom id, gunakan insert + onConflict nama
+    // Tentukan strategi insert per tabel:
+    // - satuan: upsert onConflict nama (tidak ada kolom id)
+    // - master (barang, supplier): upsert onConflict id
+    // - transaksi (masuk, keluar, pindah, transfer): insert biasa (tambah data baru)
+    const transaksiTables = ['barang_masuk','barang_keluar','barang_pindah','transfer_part'];
+    const isTransaksi = transaksiTables.includes(table);
     const conflictCol = (table === 'satuan') ? 'nama' : 'id';
+
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
-      const { error } = await sb.from(table).upsert(batch, { onConflict: conflictCol, ignoreDuplicates: true });
+      let error;
+      if (isTransaksi) {
+        // Hapus kolom id kosong agar Supabase generate otomatis
+        const cleanBatch = batch.map(r => {
+          const c = {...r};
+          if (!c.id) delete c.id;
+          return c;
+        });
+        ({ error } = await sb.from(table).insert(cleanBatch));
+      } else {
+        ({ error } = await sb.from(table).upsert(batch, { onConflict: conflictCol, ignoreDuplicates: true }));
+      }
       if (error) {
         console.error('[Import] Batch error:', error.message);
         // Fallback: insert satu per satu
         for (const row of batch) {
-          const { error: e2 } = await sb.from(table).upsert([row], { onConflict: conflictCol, ignoreDuplicates: true });
+          let e2;
+          if (isTransaksi) {
+            const c = {...row}; if (!c.id) delete c.id;
+            ({ error: e2 } = await sb.from(table).insert([c]));
+          } else {
+            ({ error: e2 } = await sb.from(table).upsert([row], { onConflict: conflictCol, ignoreDuplicates: true }));
+          }
           if (e2) { console.warn('[Import] Skip:', row.nama || row.id, e2.message); skipped++; }
           else imported++;
         }
