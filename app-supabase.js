@@ -1110,17 +1110,18 @@ async function submitImport() {
         ({ error } = await sb.from(table).upsert(batch, { onConflict: conflictCol, ignoreDuplicates: true }));
       }
       if (error) {
-        console.error('[Import] Batch error:', error.message);
+        console.error('[Import] Batch error:', JSON.stringify(error));
         // Fallback: insert satu per satu
         for (const row of batch) {
           let e2;
           if (isTransaksi) {
             const c = {...row}; if (!c.id) delete c.id;
+            console.log('[Import] Trying row:', JSON.stringify(c));
             ({ error: e2 } = await sb.from(table).insert([c]));
           } else {
             ({ error: e2 } = await sb.from(table).upsert([row], { onConflict: conflictCol, ignoreDuplicates: true }));
           }
-          if (e2) { console.warn('[Import] Skip:', row.nama || row.id, e2.message); skipped++; }
+          if (e2) { console.error('[Import] Row error:', row.nama || row.id, JSON.stringify(e2)); skipped++; }
           else imported++;
         }
       } else {
