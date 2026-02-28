@@ -1065,6 +1065,20 @@ async function submitImport() {
         const b = DB.barang.find(x => x.id === clean.barang_id);
         if (b) clean.nama_barang = b.nama;
       }
+      // Field wajib yang mungkin tidak ada di template
+      if (table === 'barang_masuk') {
+        if (!clean.lokasi) clean.lokasi = 'Gudang';
+        if (!clean.harga) clean.harga = 0;
+        if (!clean.penerima) clean.penerima = '';
+      }
+      if (table === 'barang_keluar') {
+        if (!clean.lokasi_stok) clean.lokasi_stok = 'Gudang';
+        if (!clean.penggunaan) clean.penggunaan = '';
+      }
+      if (table === 'barang_pindah') {
+        if (!clean.dari) clean.dari = 'Gudang';
+        if (!clean.ke) clean.ke = 'Storing';
+      }
     }
     return clean;
   });
