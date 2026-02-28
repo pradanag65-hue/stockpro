@@ -122,7 +122,7 @@ function subscribeRealtime() {
 // ============================================================
 // HELPERS
 // ============================================================
-const fmt = n => Number(n||0).toLocaleString('id-ID');
+const fmt = n => { const v = Number(n||0); return v % 1 === 0 ? v.toLocaleString('id-ID') : v.toLocaleString('id-ID', {minimumFractionDigits:1, maximumFractionDigits:3}); };
 const fmtRp = n => 'Rp '+Number(n||0).toLocaleString('id-ID');
 const today = () => new Date().toISOString().split('T')[0];
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -391,7 +391,7 @@ function fillSel(selId,type) {
 
 function checkTransferQty() {
   const bid=document.getElementById('tf-barang').value;
-  const qty=parseInt(document.getElementById('tf-qty').value)||0;
+  const qty=parseFloat(document.getElementById('tf-qty').value.replace(',','.'))||0||0;
   if(!bid||!qty) return;
   const b=DB.barang.find(x=>x.id===bid);
   if(!b) return;
@@ -505,7 +505,7 @@ async function saveSatuan() {
   try{await sbInsert('satuan',{nama,keterangan:document.getElementById('sat-ket').value});closeModal('m-satuan');await loadAllData();renderSatuan();toast(`Satuan "${nama}" ditambahkan`);}catch(e){toast(e.message,'err');}
 }
 async function saveMasuk() {
-  const bid=document.getElementById('mk-barang').value,qty=parseInt(document.getElementById('mk-qty').value),satuan=document.getElementById('mk-satuan').value;
+  const bid=document.getElementById('mk-barang').value,qty=parseFloat(document.getElementById('mk-qty').value.replace(',','.'))||0,satuan=document.getElementById('mk-satuan').value;
   if(!bid||!qty||qty<1||!satuan){toast('Barang, QTY & Satuan wajib','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
   try{
@@ -514,7 +514,7 @@ async function saveMasuk() {
   }catch(e){toast(e.message,'err');}
 }
 async function saveKeluar() {
-  const bid=document.getElementById('kl-barang').value,qty=parseInt(document.getElementById('kl-qty').value),satuan=document.getElementById('kl-satuan').value,lokasi_stok=document.getElementById('kl-stok').value;
+  const bid=document.getElementById('kl-barang').value,qty=parseFloat(document.getElementById('kl-qty').value.replace(',','.'))||0,satuan=document.getElementById('kl-satuan').value,lokasi_stok=document.getElementById('kl-stok').value;
   if(!bid||!qty||qty<1||!satuan){toast('Barang, QTY & Satuan wajib','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
   const tersedia=lokasi_stok==='Gudang'?b.stok_gudang:b.stok_storing;
@@ -525,7 +525,7 @@ async function saveKeluar() {
   }catch(e){toast(e.message,'err');}
 }
 async function savePindah() {
-  const bid=document.getElementById('pd-barang').value,qty=parseInt(document.getElementById('pd-qty').value),dari=document.getElementById('pd-dari').value,ke=document.getElementById('pd-ke').value;
+  const bid=document.getElementById('pd-barang').value,qty=parseFloat(document.getElementById('pd-qty').value.replace(',','.'))||0,dari=document.getElementById('pd-dari').value,ke=document.getElementById('pd-ke').value;
   if(!bid||!qty||qty<1){toast('Barang & QTY wajib','err');return;}
   if(dari===ke){toast('Lokasi asal & tujuan tidak boleh sama','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
@@ -536,7 +536,7 @@ async function savePindah() {
 }
 async function saveTransfer() {
   const bid=document.getElementById('tf-barang').value;
-  const qty=parseInt(document.getElementById('tf-qty').value);
+  const qty=parseFloat(document.getElementById('tf-qty').value.replace(',','.'))||0;
   const vendor=document.getElementById('tf-vendor').value;
   const lokasi=document.getElementById('tf-lokasi')?.value||'Gudang';
   if(!bid||!qty||qty<1){toast('Barang & QTY wajib','err');return;}
@@ -981,8 +981,11 @@ function parseImportRows(rows) {
         }
       }
       // Konversi angka
-      if (['qty','stok_gudang','stok_storing','harga','kilometer'].includes(key)) {
+      if (['stok_gudang','stok_storing','harga','kilometer'].includes(key)) {
         val = parseInt(val) || 0;
+      }
+      if (key === 'qty') {
+        val = parseFloat(String(val).replace(',','.')) || 0;
       }
       obj[key] = val;
     });
