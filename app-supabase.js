@@ -122,7 +122,15 @@ function subscribeRealtime() {
 // ============================================================
 // HELPERS
 // ============================================================
-const fmt = n => { const v = Number(n||0); return v % 1 === 0 ? v.toLocaleString('id-ID') : v.toLocaleString('id-ID', {minimumFractionDigits:1, maximumFractionDigits:3}); };
+const fmt = n => {
+  // handle string comma decimal e.g. "0,5" or "1.5"
+  const raw = typeof n === 'string' ? n.replace(',','.') : n;
+  const v = Number(raw||0);
+  if (isNaN(v)) return '0';
+  return v % 1 === 0
+    ? v.toLocaleString('id-ID')
+    : v.toLocaleString('id-ID', {minimumFractionDigits:1, maximumFractionDigits:3});
+};
 const fmtRp = n => 'Rp '+Number(n||0).toLocaleString('id-ID');
 const today = () => new Date().toISOString().split('T')[0];
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -135,7 +143,7 @@ const genID = (pre,arr) => {
 function getStok(bid) {
   const b = DB.barang.find(x=>x.id===bid);
   if (!b) return {gudang:0,storing:0};
-  return { gudang: b.stok_gudang||0, storing: b.stok_storing||0 };
+  return { gudang: Number(b.stok_gudang)||0, storing: Number(b.stok_storing)||0 };
 }
 
 // ============================================================
@@ -266,13 +274,13 @@ function closeConfirm() { document.getElementById('confirm-overlay').classList.r
 // ============================================================
 function countUp(el, target, duration=600) {
   if (!el) return;
-  const start = parseInt(el.textContent.replace(/\./g,'')) || 0;
+  const start = parseFloat(el.textContent.replace(/\./g,'').replace(',','.')) || 0;
   const diff = target - start; if (diff === 0) return;
   const step = diff / (duration / 16); let cur = start;
   const timer = setInterval(() => {
     cur += step;
     if ((step > 0 && cur >= target) || (step < 0 && cur <= target)) { el.textContent = fmt(target); clearInterval(timer); }
-    else { el.textContent = fmt(Math.round(cur)); }
+    else { el.textContent = fmt(cur % 1 === 0 ? Math.round(cur) : +cur.toFixed(3)); }
   }, 16);
 }
 
@@ -489,7 +497,7 @@ async function saveBarang() {
   const id=document.getElementById('b-id').value.trim(),nama=document.getElementById('b-nama').value.trim(),part_number=document.getElementById('b-part').value.trim();
   if(!id||!nama){toast('ID & Nama Barang wajib','err');return;}
   try{
-    await sbInsert('barang',{id,nama,part_number,model:document.getElementById('b-model').value,stok_gudang:parseInt(document.getElementById('b-stok-g').value)||0,stok_storing:parseInt(document.getElementById('b-stok-s').value)||0});
+    await sbInsert('barang',{id,nama,part_number,model:document.getElementById('b-model').value,stok_gudang:parseFloat(document.getElementById('b-stok-g').value)||0,stok_storing:parseFloat(document.getElementById('b-stok-s').value)||0});
     closeModal('m-barang');['b-id','b-nama','b-part','b-model'].forEach(x=>document.getElementById(x).value='');
     fotoBase64=null;await loadAllData();renderMasterBarang();toast(`Barang "${nama}" ditambahkan`);
   }catch(e){toast(e.message,'err');}
@@ -592,7 +600,7 @@ async function saveOpname() {
   const inputs=document.querySelectorAll('.opname-input');
   const items=[];
   inputs.forEach(inp=>{
-    const bid=inp.dataset.id, val=parseInt(inp.value);
+    const bid=inp.dataset.id, val=parseFloat(String(inp.value).replace(',','.'));
     if(!isNaN(val) && val>=0 && inp.value!=='') {
       const s=getStok(bid);
       items.push({barang_id:bid, stok_fisik:val, stok_sistem:s.gudang+s.storing, tanggal:today(), created_by:SESSION?.user?.id});
@@ -820,7 +828,7 @@ function renderOpname() {
         <td><strong>${esc(b.nama)}</strong></td>
         <td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td>
         <td style="font-family:var(--mono);font-weight:700">${fmt(sistem)}</td>
-        <td><input class="opname-input" type="number" min="0" data-id="${b.id}" value="${fisik}" placeholder="Isi jumlah fisik" oninput="liveSelisih(this,${sistem})" style="width:120px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:13px;font-weight:700;text-align:center"></td>
+        <td><input class="opname-input" type="number" min="0" step="any" data-id="${b.id}" value="${fisik}" placeholder="Isi jumlah fisik" oninput="liveSelisih(this,${sistem})" style="width:120px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:13px;font-weight:700;text-align:center"></td>
         <td id="sel-${b.id}" style="font-family:var(--mono);font-weight:800;color:${selColor}">${selText}</td>
         <td id="st-${b.id}">${stBadge}</td>
       </tr>`;
@@ -828,7 +836,7 @@ function renderOpname() {
 }
 function liveSelisih(inp,sistem) {
   const bid=inp.dataset.id;
-  const fisik=parseInt(inp.value);
+  const fisik=parseFloat(String(inp.value).replace(',','.'));
   const elSel=document.getElementById('sel-'+bid);
   const elSt=document.getElementById('st-'+bid);
   if(isNaN(fisik)) return;
@@ -865,7 +873,7 @@ function renderLapOpname(){const rows=DB.barang.map((b,i)=>{const s=getStok(b.id
 function exportCSV(){if(!DB.barang.length){toast('Tidak ada data','err');return;}let csv='No,ID Barang,Nama Barang,Part Number,Model,Stok Gudang,Stok Storing,Total\n';DB.barang.forEach((b,i)=>{const s=getStok(b.id);csv+=`${i+1},"${b.id}","${b.nama}","${b.part_number}","${b.model||''}",${s.gudang},${s.storing},${s.gudang+s.storing}\n`;});const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=`laporan-rekap-${today()}.csv`;a.click();toast('CSV diekspor');}
 function exportPDF(){const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape'});doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(0,79,53);doc.text('LAPORAN REKAPITULASI STOK — StockPro',14,18);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(100);doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}`,14,26);const rows=DB.barang.map((b,i)=>{const s=getStok(b.id);return[i+1,b.id,b.nama,b.part_number,b.model||'-',s.gudang,s.storing,s.gudang+s.storing,s.gudang+s.storing===0?'Habis':s.gudang+s.storing<5?'Kritis':'Aman'];});doc.autoTable({startY:32,head:[['#','ID','Nama Barang','Part No','Model','Gudang','Storing','Total','Status']],body:rows,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[0,79,53],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[240,250,245]}});doc.save(`laporan-rekap-${today()}.pdf`);toast('PDF diunduh 📄');}
 function exportOpnameCSV(){let csv='No,ID,Nama,Part No,Stok Sistem,Stok Fisik,Selisih,Status\n';DB.barang.forEach((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'',selisih=fisik!==''?fisik-sistem:'',status=fisik===''?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';csv+=`${i+1},"${b.id}","${b.nama}","${b.part_number}",${sistem},${fisik},${selisih},"${status}"\n`;});const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=`laporan-opname-${today()}.csv`;a.click();toast('CSV Opname diekspor');}
-function exportOpnamePDF(){const{jsPDF}=window.jspdf;const doc=new jsPDF();doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(0,79,53);doc.text('LAPORAN STOCK OPNAME — StockPro',14,18);const rows=DB.barang.map((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'-',selisih=fisik!=='-'?fisik-sistem:'-',status=fisik==='-'?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';return[i+1,b.id,b.nama,b.part_number,sistem,fisik,selisih!=='-'?(selisih>=0?'+':'')+selisih:'-',status];});doc.autoTable({startY:28,head:[['#','ID','Nama Barang','Part No','Sistem','Fisik','Selisih','Status']],body:rows,styles:{fontSize:9},headStyles:{fillColor:[90,62,0],textColor:255,fontStyle:'bold'}});doc.save(`laporan-opname-${today()}.pdf`);toast('PDF Opname diunduh 📄');}
+function exportOpnamePDF(){const{jsPDF}=window.jspdf;const doc=new jsPDF();doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(0,79,53);doc.text('LAPORAN STOCK OPNAME — StockPro',14,18);const rows=DB.barang.map((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'-',selisih=fisik!=='-'?fisik-sistem:'-',status=fisik==='-'?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';return[i+1,b.id,b.nama,b.part_number,sistem,fisik,selisih!=='-'?(selisih>=0?'+':'')+fmt(selisih):'-',status];});doc.autoTable({startY:28,head:[['#','ID','Nama Barang','Part No','Sistem','Fisik','Selisih','Status']],body:rows,styles:{fontSize:9},headStyles:{fillColor:[90,62,0],textColor:255,fontStyle:'bold'}});doc.save(`laporan-opname-${today()}.pdf`);toast('PDF Opname diunduh 📄');}
 
 // ============================================================
 // INIT
