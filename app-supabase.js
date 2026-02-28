@@ -1210,12 +1210,19 @@ async function submitImport() {
       // Field wajib yang mungkin tidak ada di template
       if (table === 'barang_masuk') {
         if (!clean.lokasi) clean.lokasi = 'Gudang';
-        if (!clean.harga) clean.harga = 0;
+        if (clean.harga === undefined || clean.harga === null || clean.harga === '') clean.harga = 0;
         if (!clean.penerima) clean.penerima = '';
+        if (!clean.keterangan) clean.keterangan = '';
+        if (!clean.satuan) clean.satuan = 'Pcs';
       }
       if (table === 'barang_keluar') {
         if (!clean.lokasi_stok) clean.lokasi_stok = 'Gudang';
         if (!clean.penggunaan) clean.penggunaan = '';
+        if (!clean.mekanik) clean.mekanik = '';
+        if (!clean.no_lambung) clean.no_lambung = '';
+        if (clean.kilometer === undefined || clean.kilometer === null || clean.kilometer === '') clean.kilometer = null;
+        // Pastikan satuan tidak kosong
+        if (!clean.satuan) clean.satuan = 'Pcs';
       }
       if (table === 'barang_pindah') {
         if (!clean.dari) clean.dari = 'Gudang';
@@ -1247,6 +1254,7 @@ async function submitImport() {
           if (!c.id) delete c.id;
           return c;
         });
+        console.log('[Import] Inserting batch ke', table, JSON.stringify(cleanBatch[0]));
         ({ error } = await sb.from(table).insert(cleanBatch));
       } else {
         ({ error } = await sb.from(table).upsert(batch, { onConflict: conflictCol, ignoreDuplicates: true }));
@@ -1270,6 +1278,12 @@ async function submitImport() {
         imported += batch.length;
       }
     }
+    if (skipped > 0 && imported === 0) {
+      toast(`Import gagal: semua ${skipped} baris ditolak. Cek konsol (F12) untuk detail error.`, 'err');
+      btn.textContent = '⬆️ Import Data';
+      btn.disabled = false;
+      return;
+    }
     closeModal('m-import');
     await loadAllData();
     const R = {
@@ -1278,8 +1292,11 @@ async function submitImport() {
     };
     if (R[currentImportType]) R[currentImportType]();
     renderDashboard();
-    const skipMsg = skipped > 0 ? `, ${skipped} dilewati` : '';
-    toast(`✅ Berhasil import ${imported} data${skipMsg}`);
+    if (skipped > 0) {
+      toast(`⚠️ Import: ${imported} berhasil, ${skipped} baris gagal. Buka konsol browser (F12) untuk lihat error detail.`, 'warn');
+    } else {
+      toast(`✅ Berhasil import ${imported} data`);
+    }
   } catch(e) {
     console.error('[Import] Fatal:', e);
     toast('Import gagal: ' + e.message, 'err');
