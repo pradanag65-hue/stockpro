@@ -1073,15 +1073,17 @@ async function submitImport() {
     const batchSize = 50;
     let imported = 0;
     let skipped = 0;
+    // Tabel satuan tidak punya kolom id, gunakan insert + onConflict nama
+    const conflictCol = (table === 'satuan') ? 'nama' : 'id';
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
-      const { error } = await sb.from(table).upsert(batch, { onConflict: 'id' });
+      const { error } = await sb.from(table).upsert(batch, { onConflict: conflictCol, ignoreDuplicates: true });
       if (error) {
         console.error('[Import] Batch error:', error.message);
         // Fallback: insert satu per satu
         for (const row of batch) {
-          const { error: e2 } = await sb.from(table).upsert([row], { onConflict: 'id' });
-          if (e2) { console.warn('[Import] Skip:', row.id, e2.message); skipped++; }
+          const { error: e2 } = await sb.from(table).upsert([row], { onConflict: conflictCol, ignoreDuplicates: true });
+          if (e2) { console.warn('[Import] Skip:', row.nama || row.id, e2.message); skipped++; }
           else imported++;
         }
       } else {
