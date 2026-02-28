@@ -959,11 +959,26 @@ function parseImportRows(rows) {
     const obj = {};
     cfg.keys.forEach((key, ki) => {
       let val = row[ki] !== undefined ? String(row[ki]).trim() : '';
-      // Format tanggal
+      // Format tanggal → selalu konversi ke YYYY-MM-DD
       if (key === 'tanggal' && val) {
-        if (val.includes('/')) val = val.split('/').reverse().join('-'); // dd/mm/yyyy → yyyy-mm-dd
-        else if (val.match(/^\d{2}-\d{2}-\d{4}$/)) val = val.split('-').reverse().join('-');
-        else if (val instanceof Date) val = val.toISOString().split('T')[0];
+        // Cek apakah val adalah angka serial Excel (misal: 45987)
+        if (!isNaN(val) && val > 40000) {
+          const excelEpoch = new Date(1899, 11, 30);
+          const d = new Date(excelEpoch.getTime() + parseInt(val) * 86400000);
+          val = d.toISOString().split('T')[0];
+        } else if (val.includes('/')) {
+          val = val.split('/').reverse().join('-'); // dd/mm/yyyy → yyyy-mm-dd
+        } else if (val.match(/^\d{2}-\d{2}-\d{4}$/)) {
+          val = val.split('-').reverse().join('-'); // dd-mm-yyyy → yyyy-mm-dd
+        } else {
+          // Tangani semua format lain (termasuk "Sat Jan 03 2026 ...", ISO, dll)
+          const d = new Date(val);
+          if (!isNaN(d.getTime())) {
+            val = d.getFullYear() + '-' +
+                  String(d.getMonth()+1).padStart(2,'0') + '-' +
+                  String(d.getDate()).padStart(2,'0');
+          }
+        }
       }
       // Konversi angka
       if (['qty','stok_gudang','stok_storing','harga','kilometer'].includes(key)) {
