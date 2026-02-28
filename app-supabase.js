@@ -514,7 +514,7 @@ async function saveSatuan() {
 }
 async function saveMasuk() {
   const bid=document.getElementById('mk-barang').value,qty=parseFloat(document.getElementById('mk-qty').value.replace(',','.'))||0,satuan=document.getElementById('mk-satuan').value;
-  if(!bid||!qty||qty<1||!satuan){toast('Barang, QTY & Satuan wajib','err');return;}
+  if(!bid||qty<=0||!satuan){toast('Barang, QTY & Satuan wajib','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
   try{
     await sbInsert('barang_masuk',{id:document.getElementById('mk-id').value,tanggal:document.getElementById('mk-tgl').value,barang_id:bid,nama_barang:b.nama,qty,satuan,harga:parseInt(document.getElementById('mk-harga').value)||0,supplier_id:document.getElementById('mk-supplier').value||null,penerima:document.getElementById('mk-penerima').value,keterangan:document.getElementById('mk-ket').value,lokasi:'Gudang',created_by:SESSION?.user?.id});
@@ -523,7 +523,7 @@ async function saveMasuk() {
 }
 async function saveKeluar() {
   const bid=document.getElementById('kl-barang').value,qty=parseFloat(document.getElementById('kl-qty').value.replace(',','.'))||0,satuan=document.getElementById('kl-satuan').value,lokasi_stok=document.getElementById('kl-stok').value;
-  if(!bid||!qty||qty<1||!satuan){toast('Barang, QTY & Satuan wajib','err');return;}
+  if(!bid||qty<=0||!satuan){toast('Barang, QTY & Satuan wajib','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
   const tersedia=lokasi_stok==='Gudang'?b.stok_gudang:b.stok_storing;
   if(qty>tersedia){toast(`Stok ${lokasi_stok} tidak cukup! Tersedia: ${fmt(tersedia)}`,'err');return;}
@@ -534,7 +534,7 @@ async function saveKeluar() {
 }
 async function savePindah() {
   const bid=document.getElementById('pd-barang').value,qty=parseFloat(document.getElementById('pd-qty').value.replace(',','.'))||0,dari=document.getElementById('pd-dari').value,ke=document.getElementById('pd-ke').value;
-  if(!bid||!qty||qty<1){toast('Barang & QTY wajib','err');return;}
+  if(!bid||qty<=0){toast('Barang & QTY wajib','err');return;}
   if(dari===ke){toast('Lokasi asal & tujuan tidak boleh sama','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
   try{
@@ -547,7 +547,7 @@ async function saveTransfer() {
   const qty=parseFloat(document.getElementById('tf-qty').value.replace(',','.'))||0;
   const vendor=document.getElementById('tf-vendor').value;
   const lokasi=document.getElementById('tf-lokasi')?.value||'Gudang';
-  if(!bid||!qty||qty<1){toast('Barang & QTY wajib','err');return;}
+  if(!bid||qty<=0){toast('Barang & QTY wajib','err');return;}
   if(!vendor){toast('Vendor/Supplier wajib dipilih','err');return;}
   const b=DB.barang.find(x=>x.id===bid);
   // Cari supplier_id dari nama vendor
@@ -1107,7 +1107,9 @@ function parseImportRows(rows) {
         val = parseInt(val) || 0;
       }
       if (key === 'qty') {
-        val = parseFloat(String(val).replace(',','.')) || 0;
+        // Excel bisa kirim float langsung (number type) atau string
+        const qtyRaw = typeof val === 'number' ? val : String(val).replace(',','.');
+        val = parseFloat(qtyRaw) || 0;
       }
       obj[key] = val;
     });
