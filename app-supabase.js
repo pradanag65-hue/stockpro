@@ -219,6 +219,10 @@ async function doLogin() {
 
 function showApp() {
   document.getElementById('app-wrapper').style.display = '';
+  // Tampilkan menu kelola akun dan buat avatar bisa diklik sejak awal
+  const liAkun = document.getElementById('li-akun');
+  if (liAkun) liAkun.style.display = '';
+  updateNavAvatar();
   renderDashboard();
 }
 
@@ -1349,19 +1353,31 @@ const DEFAULT_PERMISSIONS = {
 // Load profil user yang sedang login
 async function loadUserProfile() {
   if (!SESSION) return;
-  const { data, error } = await sb.from('user_profiles').select('*').eq('id', SESSION.user.id).single();
-  if (error || !data) {
-    // Auto-create jika belum ada
-    const { data: newP } = await sb.from('user_profiles').insert([{
-      id: SESSION.user.id,
-      nama: SESSION.user.email,
-      role: 'admin',
-      permissions: DEFAULT_PERMISSIONS.admin,
-      aktif: true
-    }]).select().single();
-    USER_PROFILE = newP;
-  } else {
-    USER_PROFILE = data;
+  // Selalu update avatar dulu, bahkan sebelum profil dimuat
+  updateNavAvatar();
+  try {
+    const { data, error } = await sb.from('user_profiles').select('*').eq('id', SESSION.user.id).single();
+    if (error || !data) {
+      // Tabel belum ada atau user belum punya profil — buat otomatis
+      try {
+        const { data: newP } = await sb.from('user_profiles').insert([{
+          id: SESSION.user.id,
+          nama: SESSION.user.email,
+          role: 'admin',
+          permissions: DEFAULT_PERMISSIONS.admin,
+          aktif: true
+        }]).select().single();
+        USER_PROFILE = newP;
+      } catch(_) {
+        // Tabel belum dibuat — abaikan, tetap bisa akses
+        USER_PROFILE = { id: SESSION.user.id, nama: SESSION.user.email, role: 'admin', permissions: DEFAULT_PERMISSIONS.admin, aktif: true };
+      }
+    } else {
+      USER_PROFILE = data;
+    }
+  } catch(e) {
+    // Fallback: beri akses admin penuh
+    USER_PROFILE = { id: SESSION.user.id, nama: SESSION.user.email, role: 'admin', permissions: DEFAULT_PERMISSIONS.admin, aktif: true };
   }
   applyPermissions();
   updateNavAvatar();
@@ -1417,21 +1433,21 @@ function applyPermissions() {
     document.querySelectorAll('[onclick*="openImport"], [onclick*="exportCSV"], [onclick*="exportPDF"]').forEach(el => el.style.display = 'none');
   }
 
-  // Tampilkan menu Kelola Akun hanya untuk admin
+  // Tampilkan menu Kelola Akun selalu (untuk semua user yang sudah login)
   const liAkun = document.getElementById('li-akun');
-  if (liAkun) liAkun.style.display = isAdmin ? '' : 'none';
+  if (liAkun) liAkun.style.display = '';
 }
 
 function updateNavAvatar() {
-  if (!USER_PROFILE) return;
   const av = document.querySelector('.nav-av');
-  if (av) {
-    const nama = USER_PROFILE.nama || SESSION?.user?.email || 'User';
-    av.textContent = nama.slice(0,2).toUpperCase();
-    av.title = `${nama} (${USER_PROFILE.role})`;
-    av.onclick = () => { if(USER_PROFILE.role==='admin') goPage('kelola-akun'); };
-    av.style.cursor = USER_PROFILE.role==='admin' ? 'pointer' : 'default';
-  }
+  if (!av) return;
+  const email = SESSION?.user?.email || '';
+  const nama = USER_PROFILE?.nama || email || 'AD';
+  const role = USER_PROFILE?.role || 'admin'; // default admin jika profil belum ada
+  av.textContent = nama.slice(0,2).toUpperCase() || 'AD';
+  av.title = `${nama} (${role}) — Klik untuk Kelola Akun`;
+  av.style.cursor = 'pointer';
+  av.onclick = () => goPage('kelola-akun');
 }
 
 // ---- LOAD SEMUA USER (admin only) ----
