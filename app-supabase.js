@@ -528,7 +528,7 @@ async function saveKeluar() {
   const tersedia=lokasi_stok==='Gudang'?b.stok_gudang:b.stok_storing;
   if(qty>tersedia){toast(`Stok ${lokasi_stok} tidak cukup! Tersedia: ${fmt(tersedia)}`,'err');return;}
   try{
-    await sbInsert('barang_keluar',{id:document.getElementById('kl-id').value,tanggal:document.getElementById('kl-tgl').value,no_lambung:document.getElementById('kl-lamb').value,kilometer:parseInt(document.getElementById('kl-km').value)||null,barang_id:bid,nama_barang:b.nama,qty,satuan,lokasi_stok,mekanik:document.getElementById('kl-mekanik').value,penggunaan:document.getElementById('kl-guna').value,keterangan:document.getElementById('kl-ket').value,created_by:SESSION?.user?.id});
+    await sbInsert('barang_keluar',{id:document.getElementById('kl-id').value,tanggal:document.getElementById('kl-tgl').value,no_lambung:document.getElementById('kl-lamb').value,kilometer:parseFloat(document.getElementById('kl-km').value)||null,barang_id:bid,nama_barang:b.nama,qty,satuan,lokasi_stok,mekanik:document.getElementById('kl-mekanik').value,penggunaan:document.getElementById('kl-guna').value,keterangan:document.getElementById('kl-ket').value,created_by:SESSION?.user?.id});
     closeModal('m-keluar');await loadAllData();renderKeluar();renderDashboard();toast(`Keluar: ${b.nama} -${fmt(qty)} ${satuan}`);
   }catch(e){toast(e.message,'err');}
 }
@@ -1103,8 +1103,11 @@ function parseImportRows(rows) {
         }
       }
       // Konversi angka
-      if (['stok_gudang','stok_storing','harga','kilometer'].includes(key)) {
+      if (['stok_gudang','stok_storing','harga'].includes(key)) {
         val = parseInt(val) || 0;
+      }
+      if (key === 'kilometer') {
+        val = val !== '' ? (parseFloat(String(val).replace(',','.')) || null) : null;
       }
       if (key === 'qty') {
         // Excel bisa kirim float langsung (number type) atau string
