@@ -1209,19 +1209,24 @@ async function submitImport() {
       }
       // Field wajib yang mungkin tidak ada di template
       if (table === 'barang_masuk') {
-        if (!clean.lokasi) clean.lokasi = 'Gudang';
+        // Normalisasi lokasi
+        const lokasiMasukRaw = (clean.lokasi || '').toString().trim().toLowerCase();
+        if (lokasiMasukRaw === 'storing') clean.lokasi = 'Storing';
+        else clean.lokasi = 'Gudang';
         if (clean.harga === undefined || clean.harga === null || clean.harga === '') clean.harga = 0;
         if (!clean.penerima) clean.penerima = '';
         if (!clean.keterangan) clean.keterangan = '';
         if (!clean.satuan) clean.satuan = 'Pcs';
       }
       if (table === 'barang_keluar') {
-        if (!clean.lokasi_stok) clean.lokasi_stok = 'Gudang';
+        // Normalisasi lokasi_stok: GUDANG/gudang → Gudang, STORING/storing → Storing
+        const lokasiRaw = (clean.lokasi_stok || '').toString().trim().toLowerCase();
+        if (lokasiRaw === 'storing') clean.lokasi_stok = 'Storing';
+        else clean.lokasi_stok = 'Gudang'; // default Gudang untuk apapun selain Storing
         if (!clean.penggunaan) clean.penggunaan = '';
         if (!clean.mekanik) clean.mekanik = '';
         if (!clean.no_lambung) clean.no_lambung = '';
         if (clean.kilometer === undefined || clean.kilometer === null || clean.kilometer === '') clean.kilometer = null;
-        // Pastikan satuan tidak kosong
         if (!clean.satuan) clean.satuan = 'Pcs';
       }
       if (table === 'barang_pindah') {
