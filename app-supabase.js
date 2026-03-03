@@ -174,12 +174,12 @@ function showLoginPage() {
   if (!lp) {
     lp = document.createElement('div');
     lp.id = 'login-page';
-    lp.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#004F35,#00704A,#1E8C5A);';
+    lp.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1A1A1A,#2A2520);';
     lp.innerHTML = `
       <div style="background:white;border-radius:24px;padding:40px;width:380px;box-shadow:0 24px 80px rgba(0,50,30,0.4);">
         <div style="text-align:center;margin-bottom:28px;">
           <div style="font-size:40px;margin-bottom:8px;">⚙️</div>
-          <div style="font-family:'Lora',serif;font-size:22px;font-weight:700;color:#004F35">StockPro</div>
+          <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#B8860B">StockPro</div>
           <div style="font-size:13px;color:#7A9A8A;margin-top:4px;">Sistem Manajemen Gudang</div>
         </div>
         <div style="margin-bottom:14px;">
@@ -188,9 +188,9 @@ function showLoginPage() {
         </div>
         <div style="margin-bottom:22px;">
           <label style="font-size:11px;font-weight:800;color:#7A9A8A;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Password</label>
-          <input id="login-pass" type="password" placeholder="••••••••" style="width:100%;padding:11px 14px;border:1.5px solid #DDE8E3;border-radius:10px;font-size:14px;outline:none;font-family:inherit;" onfocus="this.style.borderColor='#00704A'" onblur="this.style.borderColor='#DDE8E3'" onkeydown="if(event.key==='Enter')doLogin()">
+          <input id="login-pass" type="password" placeholder="••••••••" style="width:100%;padding:11px 14px;border:1.5px solid #E8E8E8;border-radius:10px;font-size:14px;outline:none;font-family:inherit;" onfocus="this.style.borderColor='#B8860B'" onblur="this.style.borderColor='#E8E8E8'" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
-        <button onclick="doLogin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#1E8C5A,#00704A);color:white;border:none;border-radius:50px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">🔐 Masuk</button>
+        <button onclick="doLogin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#D4A017,#B8860B);color:white;border:none;border-radius:50px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">🔐 Masuk</button>
         <div id="login-err" style="margin-top:12px;color:#C0392B;font-size:13px;text-align:center;display:none;"></div>
       </div>`;
     document.body.appendChild(lp);
@@ -462,7 +462,7 @@ function showQR(b) {
   document.getElementById('qr-nama-title').textContent=b.nama;
   document.getElementById('qr-label').textContent=`${b.id} · ${b.part_number||b.part}`;
   const cont=document.getElementById('qr-container'); cont.innerHTML='';
-  new QRCode(cont,{text:`StockPro|${b.id}|${b.nama}|${b.part_number||b.part}`,width:180,height:180,colorDark:'#004F35',colorLight:'#ffffff'});
+  new QRCode(cont,{text:`StockPro|${b.id}|${b.nama}|${b.part_number||b.part}`,width:180,height:180,colorDark:'#1A1A1A',colorLight:'#ffffff'});
   openModal('m-qr');
 }
 function downloadQR() {
@@ -490,19 +490,19 @@ function renderPag(containerId,data,pKey){
 // CHARTS
 // ============================================================
 let chartTrend=null,chartDonut=null;
-function getChartColors(){const dark=document.documentElement.getAttribute('data-theme')==='dark';return{grid:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',text:dark?'#7A9E8C':'#6B8C7C',green:'#00A86B',greenA:'rgba(0,168,107,0.15)',red:'#E05C4C',redA:'rgba(224,92,76,0.15)'};}
+function getChartColors(){const dark=document.documentElement.getAttribute('data-theme')==='dark';return{grid:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)',text:dark?'#7A7570':'#8A8A8A',green:'#B8860B',greenA:'rgba(184,134,11,0.12)',red:'#E05C4C',redA:'rgba(224,92,76,0.12)'};}
 function buildTrendChart(){
   const ctx=document.getElementById('chart-trend');if(!ctx)return;
   const C=getChartColors(),days=[],masukD=[],keluarD=[];
   for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const s=d.toISOString().split('T')[0];days.push(d.toLocaleDateString('id-ID',{weekday:'short',day:'numeric'}));masukD.push(DB.masuk.filter(m=>m.tanggal===s).reduce((a,c)=>a+c.qty,0));keluarD.push(DB.keluar.filter(k=>k.tanggal===s).reduce((a,c)=>a+c.qty,0));}
   if(chartTrend)chartTrend.destroy();
-  chartTrend=new Chart(ctx,{type:'line',data:{labels:days,datasets:[{label:'Masuk',data:masukD,borderColor:C.green,backgroundColor:C.greenA,borderWidth:2.5,fill:true,tension:0.4,pointBackgroundColor:C.green,pointRadius:4},{label:'Keluar',data:keluarD,borderColor:C.red,backgroundColor:C.redA,borderWidth:2.5,fill:true,tension:0.4,pointBackgroundColor:C.red,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:C.text,font:{size:11,weight:'700'},boxWidth:12}},tooltip:{backgroundColor:'rgba(20,40,30,0.9)',titleColor:'#fff',bodyColor:'rgba(255,255,255,0.8)',padding:10}},scales:{x:{grid:{color:C.grid},ticks:{color:C.text,font:{size:10}}},y:{grid:{color:C.grid},ticks:{color:C.text,font:{size:10}},beginAtZero:true}}}});
+  chartTrend=new Chart(ctx,{type:'line',data:{labels:days,datasets:[{label:'Masuk',data:masukD,borderColor:C.green,backgroundColor:C.greenA,borderWidth:2.5,fill:true,tension:0.4,pointBackgroundColor:C.green,pointRadius:4},{label:'Keluar',data:keluarD,borderColor:C.red,backgroundColor:C.redA,borderWidth:2.5,fill:true,tension:0.4,pointBackgroundColor:C.red,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:C.text,font:{size:11,weight:'700'},boxWidth:12}},tooltip:{backgroundColor:'rgba(15,13,10,0.92)',titleColor:'#fff',bodyColor:'rgba(255,255,255,0.8)',padding:10}},scales:{x:{grid:{color:C.grid},ticks:{color:C.text,font:{size:10}}},y:{grid:{color:C.grid},ticks:{color:C.text,font:{size:10}},beginAtZero:true}}}});
 }
 function buildDonutChart(){
   const ctx=document.getElementById('chart-donut');if(!ctx)return;
   const C=getChartColors();let g=0,s=0;DB.barang.forEach(b=>{const st=getStok(b.id);g+=st.gudang;s+=st.storing;});
   if(chartDonut)chartDonut.destroy();
-  chartDonut=new Chart(ctx,{type:'doughnut',data:{labels:['Gudang','Storing'],datasets:[{data:[g||1,s||0],backgroundColor:['#00A86B','#1B6CB0'],borderColor:['#fff','#fff'],borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'70%',plugins:{legend:{position:'bottom',labels:{color:C.text,font:{size:11,weight:'700'},boxWidth:10,padding:12}},tooltip:{backgroundColor:'rgba(20,40,30,0.9)',callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.raw)} unit`}}}}});
+  chartDonut=new Chart(ctx,{type:'doughnut',data:{labels:['Gudang','Storing'],datasets:[{data:[g||1,s||0],backgroundColor:['#B8860B','#1B5E9E'],borderColor:['#fff','#fff'],borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'70%',plugins:{legend:{position:'bottom',labels:{color:C.text,font:{size:11,weight:'700'},boxWidth:10,padding:12}},tooltip:{backgroundColor:'rgba(15,13,10,0.92)',callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.raw)} unit`}}}}});
 }
 function rebuildCharts(){setTimeout(()=>{buildTrendChart();buildDonutChart();},100);}
 
