@@ -68,8 +68,8 @@ async function checkSession() {
   if (session) {
     SESSION = session;
     await loadAllData();
-    await loadUserProfile();
-    showApp();
+    showApp(); // tampilkan dulu
+    loadUserProfile(); // load profile di background, tidak blocking
   } else {
     showLoginPage();
   }
@@ -207,9 +207,9 @@ async function doLogin() {
     await login(email, pass);
     document.getElementById('login-page').style.display = 'none';
     await loadAllData();
-    await loadUserProfile();
+    showApp(); // tampilkan dulu
+    loadUserProfile(); // load profile di background
     subscribeRealtime();
-    showApp();
     toast('Selamat datang! 👋');
   } catch(e) {
     err.textContent = '❌ ' + e.message;
@@ -219,7 +219,13 @@ async function doLogin() {
 
 function showApp() {
   document.getElementById('app-wrapper').style.display = '';
-  // Tampilkan menu kelola akun dan buat avatar bisa diklik sejak awal
+  // Tampilkan semua menu navbar dulu (sebelum permissions dimuat)
+  ['grp-master','grp-input','grp-laporan'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+  document.querySelectorAll('.dd-item').forEach(el => el.style.display = '');
+  // Tampilkan menu kelola akun
   const liAkun = document.getElementById('li-akun');
   if (liAkun) liAkun.style.display = '';
   updateNavAvatar();
