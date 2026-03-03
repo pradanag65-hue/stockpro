@@ -1507,40 +1507,47 @@ async function saveUserBaru() {
   const role  = document.getElementById('au-role').value;
 
   if (!email || !pass || !nama) { toast('Email, password & nama wajib diisi','err'); return; }
-  if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }
+  if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }\
 
   const btn = document.getElementById('au-submit');
   btn.textContent = '⏳ Membuat akun...'; btn.disabled = true;
 
   try {
-    // Buat user via Supabase Auth Admin API
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SESSION.access_token}`
-      },
-      body: JSON.stringify({ email, password: pass, email_confirm: true, user_metadata: { nama } })
+    // Buat user baru via signUp (tanpa auto-login, pakai client kedua)
+    const tempClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: { persistSession: false, autoRefreshToken: false }
     });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || result.msg || 'Gagal membuat user');
 
-    const uid = result.id;
+    const { data: signUpData, error: signUpErr } = await tempClient.auth.signUp({
+      email, password: pass,
+      options: { data: { nama } }
+    });
+
+    if (signUpErr) throw new Error(signUpErr.message);
+    if (!signUpData?.user) throw new Error('Gagal membuat akun, coba lagi');
+
+    const uid = signUpData.user.id;
     const perms = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.operator;
 
-    // Simpan profile
+    // Simpan profile ke tabel user_profiles
     const { error: pe } = await sb.from('user_profiles').upsert([{
       id: uid, nama, role, permissions: perms, aktif: true
     }]);
-    if (pe) throw new Error('Profile error: ' + pe.message);
+    if (pe) throw new Error('Gagal simpan profil: ' + pe.message);
 
     closeModal('m-user-baru');
-    toast(`✅ Akun "${nama}" berhasil dibuat`);
+    ['au-email','au-pass','au-nama'].forEach(id => document.getElementById(id).value = '');
+
+    // Cek apakah email confirmation diperlukan
+    if (signUpData.user.confirmed_at || signUpData.user.email_confirmed_at) {
+      toast(`✅ Akun "${nama}" berhasil dibuat & langsung aktif`);
+    } else {
+      toast(`✅ Akun "${nama}" dibuat. User perlu konfirmasi email sebelum login.`, 'info');
+    }
     await loadAllUsers();
   } catch(e) {
     toast('Gagal: ' + e.message, 'err');
-    console.error(e);
+    console.error('[saveUserBaru]', e);
   } finally {
     btn.textContent = '💾 Buat Akun'; btn.disabled = false;
   }
@@ -1622,18 +1629,13 @@ async function saveEditUser() {
     // Update password jika diisi
     if (pass) {
       if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${editUserId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON,
-          'Authorization': `Bearer ${SESSION.access_token}`
-        },
-        body: JSON.stringify({ password: pass })
-      });
-      if (!res.ok) {
-        const r = await res.json();
-        throw new Error('Password: ' + (r.message || 'Gagal update'));
+      if (editUserId === SESSION?.user?.id) {
+        // Update password diri sendiri
+        const { error: passErr } = await sb.auth.updateUser({ password: pass });
+        if (passErr) throw new Error('Password: ' + passErr.message);
+      } else {
+        // Untuk user lain, tampilkan info bahwa admin perlu reset via Supabase
+        toast(`⚠️ Password untuk user lain harus direset via Supabase Dashboard → Authentication → Users`, 'warn');
       }
     }
 
