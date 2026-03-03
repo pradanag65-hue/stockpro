@@ -68,6 +68,7 @@ async function checkSession() {
   if (session) {
     SESSION = session;
     await loadAllData();
+    await loadUserProfile();
     showApp();
   } else {
     showLoginPage();
@@ -206,6 +207,7 @@ async function doLogin() {
     await login(email, pass);
     document.getElementById('login-page').style.display = 'none';
     await loadAllData();
+    await loadUserProfile();
     subscribeRealtime();
     showApp();
     toast('Selamat datang! 👋');
@@ -217,6 +219,18 @@ async function doLogin() {
 
 function showApp() {
   document.getElementById('app-wrapper').style.display = '';
+  // Tampilkan menu kelola akun
+  const liAkun = document.getElementById('li-akun');
+  if (liAkun) liAkun.style.display = '';
+  // Update avatar
+  const av = document.querySelector('.nav-av');
+  if (av && SESSION) {
+    const email = SESSION.user.email || '';
+    av.textContent = email.slice(0,2).toUpperCase();
+    av.title = 'Kelola Akun';
+    av.style.cursor = 'pointer';
+    av.onclick = () => goPage('kelola-akun');
+  }
   renderDashboard();
 }
 
@@ -299,6 +313,7 @@ const META = {
   'inp-opname':{bc:'Input Data › Stock Opname',group:'input'},
   'lap-rekap':{bc:'Laporan › Rekapitulasi',group:'laporan'},
   'lap-opname':{bc:'Laporan › Stock Opname',group:'laporan'},
+  'kelola-akun':{bc:'Kelola Akun',group:null},
 };
 function goPage(name) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -318,6 +333,7 @@ function goPage(name) {
     'master-satuan':renderSatuan,'inp-masuk':renderMasuk,'inp-keluar':renderKeluar,
     'inp-pindah':renderPindah,'inp-transfer':renderTransfer,'inp-opname':renderOpname,
     'lap-rekap':renderRekap,'lap-opname':renderLapOpname,
+    'kelola-akun':renderKelolAkun,
   };
   if (R[name]) R[name]();
   closeGSearch();
@@ -1311,4 +1327,188 @@ async function submitImport() {
     btn.textContent = `📥 Import ${importValidRows.length} Data`;
     btn.disabled = false;
   }
+}
+
+// ============================================================
+// USER MANAGEMENT
+// ============================================================
+let USER_PROFILE = null;
+let ALL_USERS = [];
+
+const DEFAULT_PERMISSIONS = {
+  admin:    { dashboard:true, master_barang:true, master_supplier:true, master_satuan:true, inp_masuk:true, inp_keluar:true, inp_pindah:true, inp_transfer:true, inp_opname:true, lap_rekap:true, lap_opname:true, import_export:true, can_add:true, can_delete:true },
+  operator: { dashboard:true, master_barang:true, master_supplier:true, master_satuan:true, inp_masuk:true, inp_keluar:true, inp_pindah:true, inp_transfer:true, inp_opname:true, lap_rekap:true, lap_opname:true, import_export:false, can_add:true, can_delete:false },
+  viewer:   { dashboard:true, master_barang:true, master_supplier:false, master_satuan:false, inp_masuk:false, inp_keluar:false, inp_pindah:false, inp_transfer:false, inp_opname:false, lap_rekap:true, lap_opname:true, import_export:false, can_add:false, can_delete:false },
+};
+
+const PERM_LABELS = {
+  dashboard:'Dashboard', master_barang:'Data Barang', master_supplier:'Data Supplier',
+  master_satuan:'Data Satuan', inp_masuk:'Barang Masuk', inp_keluar:'Barang Keluar',
+  inp_pindah:'Barang Pindah', inp_transfer:'Transfer Part', inp_opname:'Stock Opname',
+  lap_rekap:'Lap. Rekapitulasi', lap_opname:'Lap. Opname', import_export:'Import & Export',
+  can_add:'Bisa Tambah Data', can_delete:'Bisa Hapus Data',
+};
+
+const PERM_GROUPS = {
+  'Umum':       ['dashboard'],
+  'Data Master':['master_barang','master_supplier','master_satuan'],
+  'Input Data': ['inp_masuk','inp_keluar','inp_pindah','inp_transfer','inp_opname'],
+  'Laporan':    ['lap_rekap','lap_opname','import_export'],
+  'Aksi':       ['can_add','can_delete'],
+};
+
+async function loadUserProfile() {
+  if (!SESSION) return;
+  try {
+    const { data } = await sb.from('user_profiles').select('*').eq('id', SESSION.user.id).single();
+    USER_PROFILE = data || { id:SESSION.user.id, nama:SESSION.user.email, role:'admin', permissions:DEFAULT_PERMISSIONS.admin, aktif:true };
+  } catch(e) {
+    USER_PROFILE = { id:SESSION.user.id, nama:SESSION.user.email, role:'admin', permissions:DEFAULT_PERMISSIONS.admin, aktif:true };
+  }
+  // Update avatar dengan nama dari profil
+  const av = document.querySelector('.nav-av');
+  if (av && USER_PROFILE) {
+    const nama = USER_PROFILE.nama || SESSION.user.email;
+    av.textContent = nama.slice(0,2).toUpperCase();
+    av.title = `${nama} (${USER_PROFILE.role}) — Klik untuk Kelola Akun`;
+  }
+}
+
+async function renderKelolAkun() {
+  const tbody = document.getElementById('tb-akun');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">⏳ Memuat data user...</td></tr>`;
+  try {
+    const { data, error } = await sb.from('user_profiles').select('*').order('created_at');
+    if (error) throw error;
+    ALL_USERS = data || [];
+    if (!ALL_USERS.length) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><span class="empty-ico">👥</span><p>Belum ada user</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = ALL_USERS.map((u,i) => {
+      const roleBadge = u.role==='admin'?'bg-green':u.role==='operator'?'bg-blue':'bg-gray';
+      const isMe = u.id === SESSION?.user?.id;
+      return `<tr>
+        <td style="color:var(--muted)">${i+1}</td>
+        <td><strong>${esc(u.nama)}</strong>${isMe?` <span class="badge bg-green" style="font-size:9px">Saya</span>`:''}</td>
+        <td><span class="badge ${roleBadge}">${u.role}</span></td>
+        <td><span class="badge ${u.aktif?'bg-green':'bg-red'}">${u.aktif?'Aktif':'Nonaktif'}</span></td>
+        <td>
+          <div class="td-act">
+            <button class="btn btn-primary btn-sm" onclick="openEditUser('${u.id}')">✏️ Edit</button>
+            ${!isMe?`<button class="btn btn-ghost btn-sm" onclick="toggleAktif('${u.id}',${!u.aktif})">${u.aktif?'Nonaktifkan':'Aktifkan'}</button>`:''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red);padding:16px">❌ Gagal memuat: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function saveUserBaru() {
+  const email = document.getElementById('au-email').value.trim();
+  const pass  = document.getElementById('au-pass').value.trim();
+  const nama  = document.getElementById('au-nama').value.trim();
+  const role  = document.getElementById('au-role').value;
+  if (!email||!pass||!nama) { toast('Email, password & nama wajib diisi','err'); return; }
+  if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }
+  const btn = document.getElementById('au-submit');
+  btn.textContent = '⏳ Membuat...'; btn.disabled = true;
+  try {
+    // Buat akun baru dengan client terpisah (tidak mengganggu session admin)
+    const tmp = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:false, autoRefreshToken:false } });
+    const { data: sd, error: se } = await tmp.auth.signUp({ email, password:pass, options:{ data:{ nama } } });
+    if (se) throw new Error(se.message);
+    if (!sd?.user) throw new Error('Gagal membuat akun');
+    const uid = sd.user.id;
+    const { error: pe } = await sb.from('user_profiles').upsert([{ id:uid, nama, role, permissions:DEFAULT_PERMISSIONS[role]||DEFAULT_PERMISSIONS.operator, aktif:true }]);
+    if (pe) throw new Error('Gagal simpan profil: '+pe.message);
+    closeModal('m-user-baru');
+    ['au-email','au-pass','au-nama'].forEach(id=>document.getElementById(id).value='');
+    toast(`✅ Akun "${nama}" berhasil dibuat`);
+    renderKelolAkun();
+  } catch(e) {
+    toast('Gagal: '+e.message,'err');
+  } finally {
+    btn.textContent = '💾 Buat Akun'; btn.disabled = false;
+  }
+}
+
+let editUserId = null;
+function openEditUser(uid) {
+  editUserId = uid;
+  const u = ALL_USERS.find(x=>x.id===uid);
+  if (!u) return;
+  document.getElementById('eu-nama').value = u.nama;
+  document.getElementById('eu-role').value = u.role;
+  document.getElementById('eu-pass').value = '';
+  const p = u.permissions || DEFAULT_PERMISSIONS[u.role] || DEFAULT_PERMISSIONS.operator;
+  // Render permission checkboxes per group
+  document.getElementById('eu-perms').innerHTML = Object.entries(PERM_GROUPS).map(([grp, keys]) => `
+    <div style="margin-bottom:12px">
+      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${grp}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+        ${keys.map(key=>`
+          <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg)">
+            <input type="checkbox" id="perm-${key}" ${p[key]?'checked':''} style="accent-color:var(--green);width:14px;height:14px">
+            ${PERM_LABELS[key]||key}
+          </label>`).join('')}
+      </div>
+    </div>`).join('');
+  openModal('m-edit-user');
+}
+
+function applyRolePreset() {
+  const role = document.getElementById('eu-role').value;
+  const preset = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.operator;
+  Object.keys(PERM_LABELS).forEach(key => {
+    const cb = document.getElementById('perm-'+key);
+    if (cb) cb.checked = !!preset[key];
+  });
+}
+
+async function saveEditUser() {
+  if (!editUserId) return;
+  const nama = document.getElementById('eu-nama').value.trim();
+  const role = document.getElementById('eu-role').value;
+  const pass = document.getElementById('eu-pass').value.trim();
+  if (!nama) { toast('Nama wajib diisi','err'); return; }
+  const permissions = {};
+  Object.keys(PERM_LABELS).forEach(key => {
+    const cb = document.getElementById('perm-'+key);
+    permissions[key] = cb ? cb.checked : false;
+  });
+  const btn = document.getElementById('eu-submit');
+  btn.textContent = '⏳ Menyimpan...'; btn.disabled = true;
+  try {
+    const { error } = await sb.from('user_profiles').update({ nama, role, permissions }).eq('id', editUserId);
+    if (error) throw new Error(error.message);
+    if (pass) {
+      if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }
+      if (editUserId === SESSION?.user?.id) {
+        const { error: pe } = await sb.auth.updateUser({ password: pass });
+        if (pe) throw new Error('Password: '+pe.message);
+      } else {
+        toast('⚠️ Reset password user lain harus via Supabase Dashboard → Authentication → Users','warn');
+      }
+    }
+    closeModal('m-edit-user');
+    toast(`✅ Akun "${nama}" berhasil diperbarui`);
+    if (editUserId === SESSION?.user?.id) await loadUserProfile();
+    renderKelolAkun();
+  } catch(e) {
+    toast('Gagal: '+e.message,'err');
+  } finally {
+    btn.textContent = '💾 Simpan'; btn.disabled = false;
+  }
+}
+
+async function toggleAktif(uid, aktif) {
+  const u = ALL_USERS.find(x=>x.id===uid);
+  const { error } = await sb.from('user_profiles').update({ aktif }).eq('id', uid);
+  if (error) { toast('Gagal: '+error.message,'err'); return; }
+  toast(`Akun "${u?.nama}" ${aktif?'diaktifkan':'dinonaktifkan'}`, aktif?'ok':'warn');
+  renderKelolAkun();
 }
