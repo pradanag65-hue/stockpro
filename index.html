@@ -285,14 +285,22 @@
 
   <!-- ===== STOCK OPNAME ===== -->
   <div id="page-inp-opname" class="page">
-    <div class="ph" style="background:linear-gradient(135deg,#5A3E00,var(--amber))"><div><h2>Stock Opname</h2><p>Penghitungan & verifikasi stok fisik barang</p></div><span class="ph-icon">🔍</span></div>
+    <div class="ph"><div><h2>🔍 Stock Opname</h2><p>Penghitungan & verifikasi stok fisik barang per lokasi</p></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost" id="op-btn-gudang" onclick="setLokasiOpname('Gudang')" style="border:2px solid var(--gold);color:var(--gold);font-weight:700">📦 Gudang</button>
+        <button class="btn btn-ghost" id="op-btn-storing" onclick="setLokasiOpname('Storing')">🏪 Storing</button>
+      </div>
+    </div>
+    <div style="background:var(--gold-pale);border:1px solid var(--gold-border);border-radius:12px;padding:10px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--gold)">
+      📍 Lokasi aktif: <strong id="op-lokasi-label">Gudang</strong> — input stok fisik untuk lokasi ini
+    </div>
     <div class="filter-bar">
       <input class="search-box" placeholder="🔍  Cari barang..." id="q-opname" oninput="renderOpname()">
       <button class="btn btn-ghost" onclick="resetOpname()">🔄 Reset</button>
-      <button class="btn btn-primary" style="background:var(--amber)" onclick="saveOpname()">💾 Simpan Opname</button>
+      <button class="btn btn-primary" onclick="saveOpname()">💾 Simpan Opname</button>
     </div>
     <div class="card">
-      <div class="card-header"><div><div class="card-title">Data Stock Opname</div><div class="card-sub">Input stok fisik aktual per barang</div></div></div>
+      <div class="card-header"><div><div class="card-title">Data Stock Opname</div><div class="card-sub" id="op-card-sub">Input stok fisik aktual — Gudang</div></div></div>
       <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Barang</th><th>Nama Barang</th><th>Part No</th><th>Stok Sistem</th><th>Stok Fisik (Input)</th><th>Selisih</th><th>Status</th></tr></thead><tbody id="tb-opname"></tbody></table></div>
     </div>
   </div>
