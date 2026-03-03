@@ -1353,30 +1353,30 @@ const DEFAULT_PERMISSIONS = {
 // Load profil user yang sedang login
 async function loadUserProfile() {
   if (!SESSION) return;
-  // Selalu update avatar dulu, bahkan sebelum profil dimuat
   updateNavAvatar();
   try {
     const { data, error } = await sb.from('user_profiles').select('*').eq('id', SESSION.user.id).single();
     if (error || !data) {
-      // Tabel belum ada atau user belum punya profil — buat otomatis
+      // Tabel belum ada atau user belum punya profil — gunakan admin penuh sebagai fallback
       try {
-        const { data: newP } = await sb.from('user_profiles').insert([{
+        const { data: newP, error: insertErr } = await sb.from('user_profiles').insert([{
           id: SESSION.user.id,
           nama: SESSION.user.email,
           role: 'admin',
           permissions: DEFAULT_PERMISSIONS.admin,
           aktif: true
         }]).select().single();
-        USER_PROFILE = newP;
-      } catch(_) {
-        // Tabel belum dibuat — abaikan, tetap bisa akses
+        USER_PROFILE = !insertErr && newP ? newP : null;
+      } catch(_) {}
+      // Jika gagal insert (tabel belum ada), set fallback admin penuh
+      if (!USER_PROFILE) {
         USER_PROFILE = { id: SESSION.user.id, nama: SESSION.user.email, role: 'admin', permissions: DEFAULT_PERMISSIONS.admin, aktif: true };
       }
     } else {
       USER_PROFILE = data;
     }
   } catch(e) {
-    // Fallback: beri akses admin penuh
+    // Fallback admin penuh agar app tetap bisa dipakai
     USER_PROFILE = { id: SESSION.user.id, nama: SESSION.user.email, role: 'admin', permissions: DEFAULT_PERMISSIONS.admin, aktif: true };
   }
   applyPermissions();
@@ -1389,7 +1389,9 @@ function applyPermissions() {
   const p = USER_PROFILE.permissions || {};
   const isAdmin = USER_PROFILE.role === 'admin';
 
-  // Map page ke permission key
+  // Jika permissions kosong atau role admin, tampilkan semua
+  const showAll = isAdmin || Object.keys(p).length === 0;
+
   const pageMap = {
     'master-barang': 'master_barang',
     'master-supplier': 'master_supplier',
@@ -1403,39 +1405,40 @@ function applyPermissions() {
     'lap-opname': 'lap_opname',
   };
 
-  // Sembunyikan menu yang tidak punya akses
+  // Sembunyikan/tampilkan menu sesuai permission
   Object.entries(pageMap).forEach(([page, pkey]) => {
     const el = document.getElementById('ddi-'+page);
-    if (el) el.style.display = p[pkey] ? '' : 'none';
+    if (el) el.style.display = (showAll || p[pkey]) ? '' : 'none';
   });
 
-  // Tampilkan/sembunyikan grup jika semua submenu disembunyikan
+  // Tampilkan/sembunyikan grup
   ['master','input','laporan'].forEach(grp => {
     const dd = document.getElementById('dd-'+grp);
     if (!dd) return;
     const visible = dd.querySelectorAll('.dd-item:not([style*="display: none"]):not([style*="display:none"])').length;
     const grpEl = document.getElementById('grp-'+grp);
-    if (grpEl) grpEl.style.display = visible ? '' : 'none';
+    if (grpEl) grpEl.style.display = (showAll || visible) ? '' : 'none';
   });
 
-  // Sembunyikan tombol tambah jika tidak punya can_add
-  if (!p.can_add) {
+  // Tombol tambah
+  if (!showAll && !p.can_add) {
     document.querySelectorAll('[onclick*="openModal(\'m-masuk\')"], [onclick*="openModal(\'m-keluar\')"], [onclick*="openModal(\'m-pindah\')"], [onclick*="openModal(\'m-transfer\')"], [onclick*="openModal(\'m-barang\')"], [onclick*="openModal(\'m-supplier\')"], [onclick*="openModal(\'m-satuan\')"]').forEach(el => el.style.display = 'none');
   }
 
-  // Sembunyikan tombol hapus jika tidak punya can_delete
-  if (!p.can_delete) {
+  // Tombol hapus
+  if (!showAll && !p.can_delete) {
     document.querySelectorAll('[onclick*="deleteItem"], [onclick*="bulkDelete"], [onclick*="enterDeleteMode"]').forEach(el => el.style.display = 'none');
   }
 
   // Import/export
-  if (!p.import_export) {
+  if (!showAll && !p.import_export) {
     document.querySelectorAll('[onclick*="openImport"], [onclick*="exportCSV"], [onclick*="exportPDF"]').forEach(el => el.style.display = 'none');
   }
 
-  // Tampilkan menu Kelola Akun selalu (untuk semua user yang sudah login)
+  // Kelola Akun
   const liAkun = document.getElementById('li-akun');
-  if (liAkun) liAkun.style.display = '';
+  if (liAkun) liAkun.style.display = (showAll || isAdmin) ? '' : 'none';
+}
 }
 
 function updateNavAvatar() {
