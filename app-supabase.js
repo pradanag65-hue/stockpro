@@ -1422,7 +1422,11 @@ async function saveUserBaru() {
       email, password: pass,
       options: { data: { nama } }
     });
-    if (se) throw new Error(se.message);
+    if (se) {
+      if (se.message.includes('already registered') || se.message.includes('already been registered')) 
+        throw new Error('Email ini sudah terdaftar, gunakan email lain');
+      throw new Error(se.message);
+    }
     if (!sd?.user) throw new Error('Gagal membuat akun, coba lagi');
 
     const uid = sd.user.id;
