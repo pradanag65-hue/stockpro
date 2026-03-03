@@ -81,6 +81,15 @@
     </li>
   </ul>
 
+  <!-- Menu Kelola Akun (selalu tampil) -->
+  <ul class="nav-menu" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:8px">
+    <li id="li-akun">
+      <button class="nav-link" id="nl-akun" onclick="goPage('kelola-akun')">
+        <span class="ni">👥</span> Kelola Akun
+      </button>
+    </li>
+  </ul>
+
   <div class="nav-right">
     <!-- Global Search trigger -->
     <div class="nav-btn" onclick="openGSearch()" title="Pencarian Global (Ctrl+K)" style="width:auto;padding:0 12px;gap:8px;font-size:12px;color:rgba(255,255,255,0.6);">
@@ -334,6 +343,25 @@
   </div>
 
 
+  <!-- ===== KELOLA AKUN ===== -->
+  <div id="page-kelola-akun" class="page">
+    <div class="ph" style="background:linear-gradient(135deg,#1B4F72,#2980B9)">
+      <div>
+        <div style="font-family:var(--serif);font-size:20px;font-weight:700;color:#fff">👥 Kelola Akun</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:4px">Tambah, edit, dan atur hak akses pengguna</div>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('m-user-baru')" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:#fff">+ Tambah User</button>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Nama</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead>
+          <tbody id="tb-akun"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- end content -->
 
 <!-- ====== GLOBAL SEARCH ====== -->
@@ -351,6 +379,62 @@
       <div class="gs-hint-item">⏎ Buka</div>
       <div class="gs-hint-item">↑↓ Navigasi</div>
       <div class="gs-hint-item">ESC Tutup</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== MODAL TAMBAH USER ====== -->
+<div class="modal-overlay" id="m-user-baru">
+  <div class="modal" style="width:460px">
+    <div class="modal-head"><div class="modal-title">👤 Tambah User Baru</div><button class="modal-close" onclick="closeModal('m-user-baru')">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label class="fl">Nama Lengkap</label><input class="fc" id="au-nama" placeholder="Nama pengguna"></div>
+      <div class="fg"><label class="fl">Email</label><input class="fc" id="au-email" type="email" placeholder="email@contoh.com"></div>
+      <div class="fg"><label class="fl">Password</label><input class="fc" id="au-pass" type="password" placeholder="Minimal 6 karakter"></div>
+      <div class="fg">
+        <label class="fl">Role</label>
+        <select class="fc" id="au-role">
+          <option value="admin">Admin — Akses penuh</option>
+          <option value="operator" selected>Operator — Input & lihat data</option>
+          <option value="viewer">Viewer — Hanya lihat laporan</option>
+        </select>
+      </div>
+      <div style="background:var(--green-bg);border:1px solid var(--green-light);border-radius:10px;padding:12px;font-size:12px;color:var(--green)">
+        💡 Hak akses per menu dapat diatur lebih detail setelah akun dibuat via tombol ✏️ Edit.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('m-user-baru')">Batal</button>
+      <button class="btn btn-primary" id="au-submit" onclick="saveUserBaru()">💾 Buat Akun</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== MODAL EDIT USER ====== -->
+<div class="modal-overlay" id="m-edit-user">
+  <div class="modal" style="width:560px">
+    <div class="modal-head"><div class="modal-title">✏️ Edit Akun</div><button class="modal-close" onclick="closeModal('m-edit-user')">✕</button></div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+      <div class="fr">
+        <div class="fg"><label class="fl">Nama Lengkap</label><input class="fc" id="eu-nama" placeholder="Nama pengguna"></div>
+        <div class="fg">
+          <label class="fl">Role <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px" onclick="applyRolePreset()">↺ Terapkan preset</button></label>
+          <select class="fc" id="eu-role">
+            <option value="admin">Admin</option>
+            <option value="operator">Operator</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">Password Baru <span style="color:var(--muted);font-weight:400">(kosongkan jika tidak ingin ganti)</span></label><input class="fc" id="eu-pass" type="password" placeholder="Password baru (opsional)"></div>
+      <div style="margin-top:14px">
+        <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">⚙️ Hak Akses Menu & Fitur</div>
+        <div id="eu-perms"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('m-edit-user')">Batal</button>
+      <button class="btn btn-primary" id="eu-submit" onclick="saveEditUser()">💾 Simpan</button>
     </div>
   </div>
 </div>
