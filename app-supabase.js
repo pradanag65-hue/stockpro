@@ -1427,8 +1427,8 @@ async function saveUserBaru() {
 
     const uid = sd.user.id;
 
-    // Langsung konfirmasi email via SQL (pakai RPC)
-    await sb.rpc('confirm_user_email', { user_id: uid }).catch(()=>{});
+    // Langsung konfirmasi email via RPC
+    try { await sb.rpc('confirm_user_email', { user_id: uid }); } catch(_) {}
 
     // Simpan profil
     const { error: pe } = await sb.from('user_profiles').upsert([{
