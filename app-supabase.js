@@ -68,8 +68,7 @@ async function checkSession() {
   if (session) {
     SESSION = session;
     await loadAllData();
-    showApp(); // tampilkan dulu
-    loadUserProfile(); // load profile di background, tidak blocking
+    showApp();
   } else {
     showLoginPage();
   }
@@ -207,9 +206,8 @@ async function doLogin() {
     await login(email, pass);
     document.getElementById('login-page').style.display = 'none';
     await loadAllData();
-    showApp(); // tampilkan dulu
-    loadUserProfile(); // load profile di background
     subscribeRealtime();
+    showApp();
     toast('Selamat datang! 👋');
   } catch(e) {
     err.textContent = '❌ ' + e.message;
@@ -219,16 +217,6 @@ async function doLogin() {
 
 function showApp() {
   document.getElementById('app-wrapper').style.display = '';
-  // Tampilkan semua menu navbar dulu (sebelum permissions dimuat)
-  ['grp-master','grp-input','grp-laporan'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = '';
-  });
-  document.querySelectorAll('.dd-item').forEach(el => el.style.display = '');
-  // Tampilkan menu kelola akun
-  const liAkun = document.getElementById('li-akun');
-  if (liAkun) liAkun.style.display = '';
-  updateNavAvatar();
   renderDashboard();
 }
 
@@ -311,7 +299,6 @@ const META = {
   'inp-opname':{bc:'Input Data › Stock Opname',group:'input'},
   'lap-rekap':{bc:'Laporan › Rekapitulasi',group:'laporan'},
   'lap-opname':{bc:'Laporan › Stock Opname',group:'laporan'},
-  'kelola-akun':{bc:'Kelola Akun',group:null},
 };
 function goPage(name) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -331,7 +318,6 @@ function goPage(name) {
     'master-satuan':renderSatuan,'inp-masuk':renderMasuk,'inp-keluar':renderKeluar,
     'inp-pindah':renderPindah,'inp-transfer':renderTransfer,'inp-opname':renderOpname,
     'lap-rekap':renderRekap,'lap-opname':renderLapOpname,
-    'kelola-akun':loadAllUsers
   };
   if (R[name]) R[name]();
   closeGSearch();
@@ -1325,349 +1311,4 @@ async function submitImport() {
     btn.textContent = `📥 Import ${importValidRows.length} Data`;
     btn.disabled = false;
   }
-}
-
-// ============================================================
-// USER MANAGEMENT
-// ============================================================
-let USER_PROFILE = null; // profil user yang sedang login
-let ALL_USERS = [];      // semua user (hanya admin)
-
-const ALL_PERMISSIONS = {
-  dashboard:      { label: 'Dashboard',           group: 'Umum' },
-  master_barang:  { label: 'Data Barang',          group: 'Data Master' },
-  master_supplier:{ label: 'Data Supplier',        group: 'Data Master' },
-  master_satuan:  { label: 'Data Satuan',          group: 'Data Master' },
-  inp_masuk:      { label: 'Barang Masuk',         group: 'Input Data' },
-  inp_keluar:     { label: 'Barang Keluar',        group: 'Input Data' },
-  inp_pindah:     { label: 'Barang Pindah',        group: 'Input Data' },
-  inp_transfer:   { label: 'Transfer Part List',   group: 'Input Data' },
-  inp_opname:     { label: 'Stock Opname',         group: 'Input Data' },
-  lap_rekap:      { label: 'Laporan Rekapitulasi', group: 'Laporan' },
-  lap_opname:     { label: 'Laporan Stock Opname', group: 'Laporan' },
-  import_export:  { label: 'Import & Export',      group: 'Laporan' },
-  can_add:        { label: 'Bisa Tambah Data',     group: 'Aksi' },
-  can_delete:     { label: 'Bisa Hapus Data',      group: 'Aksi' },
-};
-
-const DEFAULT_PERMISSIONS = {
-  admin:    Object.fromEntries(Object.keys(ALL_PERMISSIONS).map(k=>[k,true])),
-  operator: { dashboard:true, master_barang:true, master_supplier:true, master_satuan:true, inp_masuk:true, inp_keluar:true, inp_pindah:true, inp_transfer:true, inp_opname:true, lap_rekap:true, lap_opname:true, import_export:false, can_add:true, can_delete:false },
-  viewer:   { dashboard:true, master_barang:true, master_supplier:false, master_satuan:false, inp_masuk:false, inp_keluar:false, inp_pindah:false, inp_transfer:false, inp_opname:false, lap_rekap:true, lap_opname:true, import_export:false, can_add:false, can_delete:false },
-};
-
-// Load profil user yang sedang login
-async function loadUserProfile() {
-  if (!SESSION) return;
-  updateNavAvatar();
-  try {
-    const { data, error } = await sb.from('user_profiles').select('*').eq('id', SESSION.user.id).single();
-    if (error || !data) {
-      // Tabel belum ada atau user belum punya profil — gunakan admin penuh sebagai fallback
-      try {
-        const { data: newP, error: insertErr } = await sb.from('user_profiles').insert([{
-          id: SESSION.user.id,
-          nama: SESSION.user.email,
-          role: 'admin',
-          permissions: DEFAULT_PERMISSIONS.admin,
-          aktif: true
-        }]).select().single();
-        USER_PROFILE = !insertErr && newP ? newP : null;
-      } catch(_) {}
-      // Jika gagal insert (tabel belum ada), set fallback admin penuh
-      if (!USER_PROFILE) {
-        USER_PROFILE = { id: SESSION.user.id, nama: SESSION.user.email, role: 'admin', permissions: DEFAULT_PERMISSIONS.admin, aktif: true };
-      }
-    } else {
-      USER_PROFILE = data;
-    }
-  } catch(e) {
-    // Fallback admin penuh agar app tetap bisa dipakai
-    USER_PROFILE = { id: SESSION.user.id, nama: SESSION.user.email, role: 'admin', permissions: DEFAULT_PERMISSIONS.admin, aktif: true };
-  }
-  applyPermissions();
-  updateNavAvatar();
-}
-
-// Terapkan permission ke navbar & tombol
-function applyPermissions() {
-  if (!USER_PROFILE) return;
-  const p = USER_PROFILE.permissions || {};
-  const isAdmin = USER_PROFILE.role === 'admin';
-
-  // Jika permissions kosong atau role admin, tampilkan semua
-  const showAll = isAdmin || Object.keys(p).length === 0;
-
-  const pageMap = {
-    'master-barang': 'master_barang',
-    'master-supplier': 'master_supplier',
-    'master-satuan': 'master_satuan',
-    'inp-masuk': 'inp_masuk',
-    'inp-keluar': 'inp_keluar',
-    'inp-pindah': 'inp_pindah',
-    'inp-transfer': 'inp_transfer',
-    'inp-opname': 'inp_opname',
-    'lap-rekap': 'lap_rekap',
-    'lap-opname': 'lap_opname',
-  };
-
-  // Sembunyikan/tampilkan menu sesuai permission
-  Object.entries(pageMap).forEach(([page, pkey]) => {
-    const el = document.getElementById('ddi-'+page);
-    if (el) el.style.display = (showAll || p[pkey]) ? '' : 'none';
-  });
-
-  // Tampilkan/sembunyikan grup
-  ['master','input','laporan'].forEach(grp => {
-    const dd = document.getElementById('dd-'+grp);
-    if (!dd) return;
-    const visible = dd.querySelectorAll('.dd-item:not([style*="display: none"]):not([style*="display:none"])').length;
-    const grpEl = document.getElementById('grp-'+grp);
-    if (grpEl) grpEl.style.display = (showAll || visible) ? '' : 'none';
-  });
-
-  // Tombol tambah
-  if (!showAll && !p.can_add) {
-    document.querySelectorAll('[onclick*="openModal(\'m-masuk\')"], [onclick*="openModal(\'m-keluar\')"], [onclick*="openModal(\'m-pindah\')"], [onclick*="openModal(\'m-transfer\')"], [onclick*="openModal(\'m-barang\')"], [onclick*="openModal(\'m-supplier\')"], [onclick*="openModal(\'m-satuan\')"]').forEach(el => el.style.display = 'none');
-  }
-
-  // Tombol hapus
-  if (!showAll && !p.can_delete) {
-    document.querySelectorAll('[onclick*="deleteItem"], [onclick*="bulkDelete"], [onclick*="enterDeleteMode"]').forEach(el => el.style.display = 'none');
-  }
-
-  // Import/export
-  if (!showAll && !p.import_export) {
-    document.querySelectorAll('[onclick*="openImport"], [onclick*="exportCSV"], [onclick*="exportPDF"]').forEach(el => el.style.display = 'none');
-  }
-
-  // Kelola Akun
-  const liAkun = document.getElementById('li-akun');
-  if (liAkun) liAkun.style.display = (showAll || isAdmin) ? '' : 'none';
-}
-}
-
-function updateNavAvatar() {
-  const av = document.querySelector('.nav-av');
-  if (!av) return;
-  const email = SESSION?.user?.email || '';
-  const nama = USER_PROFILE?.nama || email || 'AD';
-  const role = USER_PROFILE?.role || 'admin'; // default admin jika profil belum ada
-  av.textContent = nama.slice(0,2).toUpperCase() || 'AD';
-  av.title = `${nama} (${role}) — Klik untuk Kelola Akun`;
-  av.style.cursor = 'pointer';
-  av.onclick = () => goPage('kelola-akun');
-}
-
-// ---- LOAD SEMUA USER (admin only) ----
-async function loadAllUsers() {
-  const { data, error } = await sb.from('user_profiles')
-    .select('*, auth_email:id')
-    .order('created_at');
-  if (error) { toast('Gagal memuat data user: '+error.message,'err'); return; }
-
-  // Ambil email dari auth
-  const { data: authUsers } = await sb.rpc('get_users_email').catch(()=>({data:null}));
-  
-  ALL_USERS = data || [];
-  renderKelolAkun();
-}
-
-async function renderKelolAkun() {
-  // Ambil email user dari auth.users via admin endpoint
-  const emailMap = {};
-  try {
-    // Coba ambil via listUsers (butuh service role) — fallback ke email SESSION
-    emailMap[SESSION.user.id] = SESSION.user.email;
-  } catch(_) {}
-
-  const tbody = document.getElementById('tb-akun');
-  if (!tbody) return;
-
-  if (!ALL_USERS.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><span class="empty-ico">👥</span><p>Belum ada user</p></div></td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = ALL_USERS.map((u, i) => {
-    const roleBadge = u.role === 'admin' ? 'bg-green' : u.role === 'operator' ? 'bg-blue' : 'bg-gray';
-    const isMe = u.id === SESSION?.user?.id;
-    return `<tr>
-      <td style="color:var(--muted)">${i+1}</td>
-      <td><strong>${esc(u.nama)}</strong>${isMe ? ' <span class="badge bg-green" style="font-size:9px">Saya</span>' : ''}</td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--muted)">${u.id === SESSION?.user?.id ? SESSION.user.email : '—'}</td>
-      <td><span class="badge ${roleBadge}">${u.role}</span></td>
-      <td><span class="badge ${u.aktif?'bg-green':'bg-red'}">${u.aktif?'Aktif':'Nonaktif'}</span></td>
-      <td>
-        <div class="td-act">
-          <button class="btn btn-primary btn-sm" onclick="openEditUser('${u.id}')">✏️ Edit</button>
-          ${!isMe ? `<button class="btn btn-${u.aktif?'ghost':'primary'} btn-sm" onclick="toggleUserAktif('${u.id}',${!u.aktif})">${u.aktif?'Nonaktifkan':'Aktifkan'}</button>` : ''}
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-// ---- TAMBAH USER BARU ----
-async function saveUserBaru() {
-  const email = document.getElementById('au-email').value.trim();
-  const pass  = document.getElementById('au-pass').value.trim();
-  const nama  = document.getElementById('au-nama').value.trim();
-  const role  = document.getElementById('au-role').value;
-
-  if (!email || !pass || !nama) { toast('Email, password & nama wajib diisi','err'); return; }
-  if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }\
-
-  const btn = document.getElementById('au-submit');
-  btn.textContent = '⏳ Membuat akun...'; btn.disabled = true;
-
-  try {
-    // Buat user baru via signUp (tanpa auto-login, pakai client kedua)
-    const tempClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-
-    const { data: signUpData, error: signUpErr } = await tempClient.auth.signUp({
-      email, password: pass,
-      options: { data: { nama } }
-    });
-
-    if (signUpErr) throw new Error(signUpErr.message);
-    if (!signUpData?.user) throw new Error('Gagal membuat akun, coba lagi');
-
-    const uid = signUpData.user.id;
-    const perms = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.operator;
-
-    // Simpan profile ke tabel user_profiles
-    const { error: pe } = await sb.from('user_profiles').upsert([{
-      id: uid, nama, role, permissions: perms, aktif: true
-    }]);
-    if (pe) throw new Error('Gagal simpan profil: ' + pe.message);
-
-    closeModal('m-user-baru');
-    ['au-email','au-pass','au-nama'].forEach(id => document.getElementById(id).value = '');
-
-    // Cek apakah email confirmation diperlukan
-    if (signUpData.user.confirmed_at || signUpData.user.email_confirmed_at) {
-      toast(`✅ Akun "${nama}" berhasil dibuat & langsung aktif`);
-    } else {
-      toast(`✅ Akun "${nama}" dibuat. User perlu konfirmasi email sebelum login.`, 'info');
-    }
-    await loadAllUsers();
-  } catch(e) {
-    toast('Gagal: ' + e.message, 'err');
-    console.error('[saveUserBaru]', e);
-  } finally {
-    btn.textContent = '💾 Buat Akun'; btn.disabled = false;
-  }
-}
-
-// ---- EDIT USER ----
-let editUserId = null;
-function openEditUser(uid) {
-  editUserId = uid;
-  const u = ALL_USERS.find(x => x.id === uid);
-  if (!u) return;
-
-  document.getElementById('eu-nama').value = u.nama;
-  document.getElementById('eu-role').value = u.role;
-  document.getElementById('eu-pass').value = '';
-
-  // Render permission checkboxes
-  const p = u.permissions || {};
-  const groups = {};
-  Object.entries(ALL_PERMISSIONS).forEach(([key, cfg]) => {
-    if (!groups[cfg.group]) groups[cfg.group] = [];
-    groups[cfg.group].push({ key, label: cfg.label });
-  });
-
-  document.getElementById('eu-perms').innerHTML = Object.entries(groups).map(([grp, items]) => `
-    <div style="margin-bottom:14px">
-      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${grp}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${items.map(({key, label}) => `
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg)">
-            <input type="checkbox" id="perm-${key}" ${p[key]?'checked':''} style="accent-color:var(--green);width:15px;height:15px" onchange="syncRoleFromPerms()">
-            ${label}
-          </label>
-        `).join('')}
-      </div>
-    </div>
-  `).join('');
-
-  openModal('m-edit-user');
-}
-
-function syncRoleFromPerms() {
-  // Update role selector berdasarkan perms yang dipilih
-}
-
-function applyRolePreset() {
-  const role = document.getElementById('eu-role').value;
-  const presets = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.operator;
-  Object.keys(ALL_PERMISSIONS).forEach(key => {
-    const cb = document.getElementById('perm-'+key);
-    if (cb) cb.checked = presets[key] || false;
-  });
-}
-
-async function saveEditUser() {
-  const u = ALL_USERS.find(x => x.id === editUserId);
-  if (!u) return;
-
-  const nama = document.getElementById('eu-nama').value.trim();
-  const role = document.getElementById('eu-role').value;
-  const pass = document.getElementById('eu-pass').value.trim();
-
-  const permissions = {};
-  Object.keys(ALL_PERMISSIONS).forEach(key => {
-    const cb = document.getElementById('perm-'+key);
-    permissions[key] = cb ? cb.checked : false;
-  });
-
-  const btn = document.getElementById('eu-submit');
-  btn.textContent = '⏳ Menyimpan...'; btn.disabled = true;
-
-  try {
-    // Update profile
-    const { error } = await sb.from('user_profiles')
-      .update({ nama, role, permissions })
-      .eq('id', editUserId);
-    if (error) throw new Error(error.message);
-
-    // Update password jika diisi
-    if (pass) {
-      if (pass.length < 6) { toast('Password minimal 6 karakter','err'); return; }
-      if (editUserId === SESSION?.user?.id) {
-        // Update password diri sendiri
-        const { error: passErr } = await sb.auth.updateUser({ password: pass });
-        if (passErr) throw new Error('Password: ' + passErr.message);
-      } else {
-        // Untuk user lain, tampilkan info bahwa admin perlu reset via Supabase
-        toast(`⚠️ Password untuk user lain harus direset via Supabase Dashboard → Authentication → Users`, 'warn');
-      }
-    }
-
-    closeModal('m-edit-user');
-    toast(`✅ Akun "${nama}" berhasil diperbarui`);
-    await loadAllUsers();
-
-    // Jika edit diri sendiri, reload profil
-    if (editUserId === SESSION?.user?.id) {
-      await loadUserProfile();
-      renderDashboard();
-    }
-  } catch(e) {
-    toast('Gagal: ' + e.message, 'err');
-  } finally {
-    btn.textContent = '💾 Simpan Perubahan'; btn.disabled = false;
-  }
-}
-
-async function toggleUserAktif(uid, aktif) {
-  const u = ALL_USERS.find(x => x.id === uid);
-  const { error } = await sb.from('user_profiles').update({ aktif }).eq('id', uid);
-  if (error) { toast('Gagal: '+error.message,'err'); return; }
-  toast(`Akun "${u?.nama}" ${aktif?'diaktifkan':'dinonaktifkan'}`, aktif?'ok':'warn');
-  await loadAllUsers();
 }
