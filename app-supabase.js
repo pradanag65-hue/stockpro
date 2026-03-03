@@ -20,6 +20,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ============================================================
 let SESSION = null;
 let DB = { barang:[], supplier:[], satuan:[], masuk:[], keluar:[], pindah:[], transfer:[], opname:{} };
+let OPNAME_LOKASI = 'Gudang'; // lokasi aktif opname
 const PAG = { barang:{p:1,pp:100}, masuk:{p:1,pp:100}, keluar:{p:1,pp:100} };
 
 // ============================================================
@@ -103,7 +104,10 @@ async function loadAllData() {
     DB.pindah   = pindah;
     DB.transfer = transfer;
     DB.opname = {};
-    opnameRows.forEach(o => { DB.opname[o.barang_id] = o.stok_fisik; });
+    opnameRows.forEach(o => { 
+      if (!DB.opname[o.lokasi||'Gudang']) DB.opname[o.lokasi||'Gudang'] = {};
+      DB.opname[o.lokasi||'Gudang'][o.barang_id] = o.stok_fisik; 
+    });
   } catch(e) {
     toast('Gagal memuat data: ' + e.message, 'err');
   } finally {
@@ -619,22 +623,26 @@ async function saveOpname() {
     const bid=inp.dataset.id, val=parseFloat(String(inp.value).replace(',','.'));
     if(!isNaN(val) && val>=0 && inp.value!=='') {
       const s=getStok(bid);
-      items.push({barang_id:bid, stok_fisik:val, stok_sistem:s.gudang+s.storing, tanggal:today(), created_by:SESSION?.user?.id});
+      const stokSistem = OPNAME_LOKASI==='Gudang' ? s.gudang : s.storing;
+      items.push({barang_id:bid, stok_fisik:val, stok_sistem:stokSistem, tanggal:today(), lokasi:OPNAME_LOKASI, created_by:SESSION?.user?.id});
     }
   });
   if(!items.length){toast('Belum ada stok fisik yang diisi','warn');return;}
   const btn=document.querySelector('[onclick="saveOpname()"]');
   if(btn){btn.textContent='⏳ Menyimpan...';btn.disabled=true;}
-  const{error}=await sb.from('stock_opname').upsert(items,{onConflict:'barang_id,tanggal'});
+  const{error}=await sb.from('stock_opname').upsert(items,{onConflict:'barang_id,tanggal,lokasi'});
   if(btn){btn.textContent='💾 Simpan Opname';btn.disabled=false;}
   if(error){toast(error.message,'err');return;}
-  // Reload dan refresh
+  // Reload
   const todayStr=today();
   const{data:fresh}=await sb.from('stock_opname').select('*').eq('tanggal',todayStr);
   DB.opname={};
-  (fresh||[]).forEach(o=>{DB.opname[o.barang_id]=o.stok_fisik;});
+  (fresh||[]).forEach(o=>{
+    if(!DB.opname[o.lokasi||'Gudang']) DB.opname[o.lokasi||'Gudang']={};
+    DB.opname[o.lokasi||'Gudang'][o.barang_id]=o.stok_fisik;
+  });
   renderOpname();
-  toast('✅ Opname '+items.length+' barang berhasil disimpan!');
+  toast(`✅ Opname ${items.length} barang (${OPNAME_LOKASI}) berhasil disimpan!`);
 }
 
 // ============================================================
@@ -822,14 +830,29 @@ function renderMasuk(){const q=(document.getElementById('q-masuk')?.value||'').t
 function renderKeluar(){const q=(document.getElementById('q-keluar')?.value||'').toLowerCase();let f=filterByDate(DB.keluar,'df-keluar-from','df-keluar-to').filter(k=>(k.nama_barang||k.namaBrg||'').toLowerCase().includes(q)||k.id.toLowerCase().includes(q)).sort((a,b) => { const td = b.tanggal.localeCompare(a.tanggal); return td !== 0 ? td : b.id.localeCompare(a.id); });document.getElementById('cnt-keluar').textContent=`${f.length} transaksi`;const paged=paginate(f,'keluar');SELECTED['keluar']=new Set();DELETE_MODE['keluar']=false;document.querySelectorAll('.col-cb-keluar').forEach(el=>el.style.display='none');const bbkeluar=document.getElementById('bulk-bar-keluar');if(bbkeluar)bbkeluar.style.display='none';document.getElementById('tb-keluar').innerHTML=paged.length===0?`<tr><td colspan="14"><div class="empty"><span class="empty-ico">📭</span><p>Belum ada barang keluar</p></div></td></tr>`:paged.map((k,i)=>`<tr><td style="color:var(--muted)">${(PAG.keluar.p-1)*PAG.keluar.pp+i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(k.id)}</td><td style="color:var(--muted)">${k.tanggal||k.tgl}</td><td>${esc(k.no_lambung||k.lamb||'—')}</td><td style="font-family:var(--mono)">${k.kilometer||k.km?fmt(k.kilometer||k.km)+' km':'—'}</td><td><strong>${esc(k.nama_barang||k.namaBrg)}</strong></td><td style="font-family:var(--mono);font-weight:800;color:var(--red)">-${fmt(k.qty)}</td><td style="color:var(--muted)">${esc(k.satuan)}</td><td>${esc(k.mekanik||'—')}</td><td><span class="badge bg-blue">${k.lokasi_stok||k.stok}</span></td><td><span class="badge bg-gray" style="font-size:10px">${esc(k.penggunaan||k.guna)}</span></td><td style="color:var(--muted)">${esc(k.keterangan||k.ket||'—')}</td><td><button class="btn btn-red btn-sm btn-icon" onclick="if(!DELETE_MODE['keluar']){enterDeleteMode('keluar');return;}deleteItem('keluar','${k.id}','${esc(k.nama_barang||k.namaBrg)}')">🗑️</button></td><td class="col-cb-keluar" style="display:none;padding:7px 10px"><input type="checkbox" class="cb-row-keluar" data-id="${k.id}" onchange="toggleSelect('keluar','${k.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)"></td></tr>`).join('');renderPag('pag-keluar',f,'keluar');updateBadges();}
 function renderPindah(){const q=(document.getElementById('q-pindah')?.value||'').toLowerCase();const f=DB.pindah.filter(p=>(p.nama_barang||p.namaBrg||'').toLowerCase().includes(q)||p.id.toLowerCase().includes(q)).sort((a,b) => { const td = b.tanggal.localeCompare(a.tanggal); return td !== 0 ? td : b.id.localeCompare(a.id); });document.getElementById('cnt-pindah').textContent=`${f.length} transaksi`;SELECTED['pindah']=new Set();DELETE_MODE['pindah']=false;document.querySelectorAll('.col-cb-pindah').forEach(el=>el.style.display='none');const bbpindah=document.getElementById('bulk-bar-pindah');if(bbpindah)bbpindah.style.display='none';document.getElementById('tb-pindah').innerHTML=f.length===0?`<tr><td colspan="10"><div class="empty"><span class="empty-ico">📭</span><p>Belum ada pindah</p></div></td></tr>`:f.map((p,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(p.id)}</td><td style="color:var(--muted)">${p.tanggal||p.tgl}</td><td><strong>${esc(p.nama_barang||p.namaBrg)}</strong></td><td style="font-family:var(--mono)">${fmt(p.qty)}</td><td style="color:var(--muted)">${esc(p.satuan)}</td><td><span class="badge bg-red">${p.dari}</span></td><td><span class="badge bg-green">${p.ke}</span></td><td><button class="btn btn-red btn-sm btn-icon" onclick="if(!DELETE_MODE['pindah']){enterDeleteMode('pindah');return;}deleteItem('pindah','${p.id}','${esc(p.nama_barang||p.namaBrg)}')">🗑️</button></td><td class="col-cb-pindah" style="display:none;padding:7px 10px"><input type="checkbox" class="cb-row-pindah" data-id="${p.id}" onchange="toggleSelect('pindah','${p.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)"></td></tr>`).join('');}
 function renderTransfer(){const q=(document.getElementById('q-transfer')?.value||'').toLowerCase();const f=DB.transfer.filter(t=>(t.nama_barang||t.namaBrg||'').toLowerCase().includes(q)||t.id.toLowerCase().includes(q)).sort((a,b) => { const td = b.tanggal.localeCompare(a.tanggal); return td !== 0 ? td : b.id.localeCompare(a.id); });document.getElementById('cnt-transfer').textContent=`${f.length} transaksi`;SELECTED['transfer']=new Set();DELETE_MODE['transfer']=false;document.querySelectorAll('.col-cb-transfer').forEach(el=>el.style.display='none');const bbtransfer=document.getElementById('bulk-bar-transfer');if(bbtransfer)bbtransfer.style.display='none';document.getElementById('tb-transfer').innerHTML=f.length===0?`<tr><td colspan="11"><div class="empty"><span class="empty-ico">📭</span><p>Belum ada transfer</p></div></td></tr>`:f.map((t,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(t.id)}</td><td style="color:var(--muted)">${t.tanggal||t.tgl}</td><td><strong>${esc(t.nama_barang||t.namaBrg)}</strong></td><td style="font-family:var(--mono)">${fmt(t.qty)}</td><td style="color:var(--muted)">${esc(t.satuan)}</td><td>${esc(t.vendor||'—')}</td><td>${esc(t.penerima||'—')}</td><td style="color:var(--muted)">${esc(t.keterangan||t.ket||'—')}</td><td><button class="btn btn-red btn-sm btn-icon" onclick="if(!DELETE_MODE['transfer']){enterDeleteMode('transfer');return;}deleteItem('transfer','${t.id}','${esc(t.nama_barang||t.namaBrg)}')">🗑️</button></td><td class="col-cb-transfer" style="display:none;padding:7px 10px"><input type="checkbox" class="cb-row-transfer" data-id="${t.id}" onchange="toggleSelect('transfer','${t.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)"></td></tr>`).join('');}
+function setLokasiOpname(lokasi) {
+  OPNAME_LOKASI = lokasi;
+  document.getElementById('op-lokasi-label').textContent = lokasi;
+  document.getElementById('op-card-sub').textContent = `Input stok fisik aktual — ${lokasi}`;
+  // Update tombol aktif
+  document.getElementById('op-btn-gudang').style.borderColor = lokasi==='Gudang'?'var(--gold)':'var(--border)';
+  document.getElementById('op-btn-gudang').style.color = lokasi==='Gudang'?'var(--gold)':'var(--muted)';
+  document.getElementById('op-btn-storing').style.borderColor = lokasi==='Storing'?'var(--gold)':'var(--border)';
+  document.getElementById('op-btn-storing').style.color = lokasi==='Storing'?'var(--gold)':'var(--muted)';
+  renderOpname();
+}
+
 function renderOpname() {
   const q=(document.getElementById('q-opname')?.value||'').toLowerCase();
   const f=DB.barang.filter(b=>b.nama.toLowerCase().includes(q)||b.id.toLowerCase().includes(q));
+  const opnameData = DB.opname[OPNAME_LOKASI] || {};
   document.getElementById('tb-opname').innerHTML=f.length===0
     ?`<tr><td colspan="8"><div class="empty"><span class="empty-ico">📭</span><p>Tambah barang terlebih dahulu</p></div></td></tr>`
     :f.map((b,i)=>{
-      const s=getStok(b.id),sistem=s.gudang+s.storing;
-      const fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'';
+      const s=getStok(b.id);
+      // Stok sistem sesuai lokasi
+      const sistem = OPNAME_LOKASI==='Gudang' ? s.gudang : s.storing;
+      const fisik=opnameData[b.id]!==undefined?opnameData[b.id]:'';
       const selisih=fisik!==''?fisik-sistem:'';
       const stBadge=selisih===''
         ?'<span class="badge bg-gray">Belum</span>'
@@ -867,19 +890,20 @@ function liveSelisih(inp,sistem) {
       :'<span class="badge bg-red">📉 Kurang</span>';
   }
   // Simpan ke DB.opname sementara (untuk preview)
-  DB.opname[bid]=fisik;
+  if(!DB.opname[OPNAME_LOKASI]) DB.opname[OPNAME_LOKASI]={};
+  DB.opname[OPNAME_LOKASI][bid]=fisik;
 }
 
 let rekapLok='Semua';
 function setLokasi(lok,el){rekapLok=lok;document.querySelectorAll('#chip-lokasi .chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderRekap();}
 function renderRekap(){document.getElementById('r-loksub').textContent=rekapLok==='Semua'?'Semua lokasi':'Lokasi: '+rekapLok;let tA=0,tM=0,tK=0,tS=0;const rows=DB.barang.map((b,i)=>{const stok=getStok(b.id),stokAwal=(rekapLok==='Gudang'?b.stok_gudang:rekapLok==='Storing'?b.stok_storing:(b.stok_gudang||0)+(b.stok_storing||0))||0,masuk=DB.masuk.filter(m=>m.barang_id===b.id&&(rekapLok==='Semua'||m.lokasi===rekapLok)).reduce((a,c)=>a+c.qty,0),keluar=DB.keluar.filter(k=>k.barang_id===b.id&&(rekapLok==='Semua'||k.lokasi_stok===rekapLok)).reduce((a,c)=>a+c.qty,0),sisa=rekapLok==='Gudang'?stok.gudang:rekapLok==='Storing'?stok.storing:stok.gudang+stok.storing,st=sisa===0?'bg-red':sisa<5?'bg-amber':'bg-green';tA+=stokAwal;tM+=masuk;tK+=keluar;tS+=sisa;return`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(b.id)}</td><td><strong>${esc(b.nama)}</strong></td><td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td><td style="color:var(--muted)">${esc(b.model||'—')}</td><td style="color:var(--muted)">—</td><td style="font-family:var(--mono)">${fmt(stokAwal)}</td><td style="font-family:var(--mono);font-weight:800;color:var(--green)">+${fmt(masuk)}</td><td style="font-family:var(--mono);font-weight:800;color:var(--red)">-${fmt(keluar)}</td><td style="font-family:var(--mono);font-size:15px;font-weight:800">${fmt(sisa)}</td><td><span class="badge ${st}">${sisa===0?'Habis':sisa<5?'Kritis':'Aman'}</span></td></tr>`;});countUp(document.getElementById('r-awal'),tA);countUp(document.getElementById('r-masuk'),tM);countUp(document.getElementById('r-keluar'),tK);countUp(document.getElementById('r-sisa'),tS);document.getElementById('tb-rekap').innerHTML=rows.length===0?`<tr><td colspan="11"><div class="empty"><span class="empty-ico">📋</span><p>Belum ada data</p></div></td></tr>`:rows.join('');}
 function resetOpname() {
-  showConfirm('Reset Opname?', 'Semua input stok fisik hari ini akan dihapus.', async () => {
+  showConfirm(`Reset Opname ${OPNAME_LOKASI}?`, `Semua input stok fisik ${OPNAME_LOKASI} hari ini akan dihapus.`, async () => {
     const todayStr = today();
-    await sb.from('stock_opname').delete().eq('tanggal', todayStr);
-    DB.opname = {};
+    await sb.from('stock_opname').delete().eq('tanggal', todayStr).eq('lokasi', OPNAME_LOKASI);
+    if(DB.opname[OPNAME_LOKASI]) DB.opname[OPNAME_LOKASI] = {};
     renderOpname();
-    toast('Data opname hari ini direset', 'warn');
+    toast(`Data opname ${OPNAME_LOKASI} hari ini direset`, 'warn');
   });
 }
 
