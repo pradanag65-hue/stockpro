@@ -1417,20 +1417,34 @@ async function saveUserBaru() {
   const btn = document.getElementById('au-submit');
   btn.textContent = '⏳ Membuat...'; btn.disabled = true;
   try {
-    // Buat akun baru dengan client terpisah (tidak mengganggu session admin)
-    const tmp = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:false, autoRefreshToken:false } });
-    const { data: sd, error: se } = await tmp.auth.signUp({ email, password:pass, options:{ data:{ nama } } });
+    // Gunakan signUp standar
+    const { data: sd, error: se } = await sb.auth.signUp({
+      email, password: pass,
+      options: { data: { nama } }
+    });
     if (se) throw new Error(se.message);
-    if (!sd?.user) throw new Error('Gagal membuat akun');
+    if (!sd?.user) throw new Error('Gagal membuat akun, coba lagi');
+
     const uid = sd.user.id;
-    const { error: pe } = await sb.from('user_profiles').upsert([{ id:uid, nama, role, permissions:DEFAULT_PERMISSIONS[role]||DEFAULT_PERMISSIONS.operator, aktif:true }]);
-    if (pe) throw new Error('Gagal simpan profil: '+pe.message);
+
+    // Langsung konfirmasi email via SQL (pakai RPC)
+    await sb.rpc('confirm_user_email', { user_id: uid }).catch(()=>{});
+
+    // Simpan profil
+    const { error: pe } = await sb.from('user_profiles').upsert([{
+      id: uid, nama, role,
+      permissions: DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.operator,
+      aktif: true
+    }]);
+    if (pe) throw new Error('Gagal simpan profil: ' + pe.message);
+
     closeModal('m-user-baru');
-    ['au-email','au-pass','au-nama'].forEach(id=>document.getElementById(id).value='');
+    ['au-email','au-pass','au-nama'].forEach(id => document.getElementById(id).value = '');
     toast(`✅ Akun "${nama}" berhasil dibuat`);
     renderKelolAkun();
   } catch(e) {
-    toast('Gagal: '+e.message,'err');
+    toast('Gagal: ' + e.message, 'err');
+    console.error('[saveUserBaru]', e);
   } finally {
     btn.textContent = '💾 Buat Akun'; btn.disabled = false;
   }
