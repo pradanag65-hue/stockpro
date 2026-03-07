@@ -241,6 +241,7 @@
     <div class="ph" style="background:linear-gradient(135deg,#7B1C1C,var(--red))"><div><h2>Barang Keluar</h2><p>Input & riwayat pengeluaran barang</p></div><span class="ph-icon">📤</span></div>
     <div class="filter-bar">
       <input class="search-box" placeholder="🔍  Cari transaksi keluar..." id="q-keluar" oninput="renderKeluar()">
+      <input class="search-box" placeholder="🚌  Filter No. Lambung..." id="q-keluar-lamb" oninput="renderKeluar()" style="max-width:200px">
       <div class="date-filter"><input class="date-input" type="date" id="df-keluar-from" onchange="renderKeluar()"><span style="color:var(--muted);font-size:12px">s/d</span><input class="date-input" type="date" id="df-keluar-to" onchange="renderKeluar()"></div>
       <button class="btn btn-ghost btn-sm" onclick="openImport('keluar')">📂 Import Excel</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadTemplate('keluar')">📋 Template</button>
