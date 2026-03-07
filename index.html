@@ -343,14 +343,26 @@
   <!-- ===== LAPORAN OPNAME ===== -->
   <div id="page-lap-opname" class="page">
     <div class="ph" style="background:linear-gradient(135deg,#5A3E00,var(--amber))"><div><h2>Laporan Hasil Stock Opname</h2><p>Perbandingan stok sistem vs stok fisik</p></div><span class="ph-icon">📑</span></div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;gap:8px">
-      <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Cetak</button>
-      <button class="btn btn-ghost btn-sm" onclick="exportOpnameCSV()">⬇️ CSV</button>
-      <button class="btn btn-primary btn-sm" style="background:var(--amber)" onclick="exportOpnamePDF()">📄 PDF</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="shiftLapOpnameBulan(-1)" style="font-size:16px;padding:4px 10px">‹</button>
+        <div style="font-size:13px;font-weight:700;color:var(--gold);min-width:140px;text-align:center" id="lap-opname-bulan-label">—</div>
+        <button class="btn btn-ghost btn-sm" onclick="shiftLapOpnameBulan(1)" id="lap-opname-bulan-next" style="font-size:16px;padding:4px 10px">›</button>
+        <div class="chip-group" style="margin:0">
+          <div class="chip active" id="lap-op-chip-semua" onclick="setLapOpnameLokasi('Semua',this)">Semua</div>
+          <div class="chip" id="lap-op-chip-gudang" onclick="setLapOpnameLokasi('Gudang',this)">Gudang</div>
+          <div class="chip" id="lap-op-chip-storing" onclick="setLapOpnameLokasi('Storing',this)">Storing</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Cetak</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportOpnameCSV()">⬇️ CSV</button>
+        <button class="btn btn-primary btn-sm" style="background:var(--amber)" onclick="exportOpnamePDF()">📄 PDF</button>
+      </div>
     </div>
     <div class="card">
-      <div class="card-header"><div><div class="card-title">Hasil Stock Opname</div><div class="card-sub">Perbandingan stok sistem vs fisik</div></div></div>
-      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Barang</th><th>Nama Barang</th><th>Part No</th><th>Stok Sistem</th><th>Stok Fisik</th><th>Selisih</th><th>Keterangan</th><th>Status</th></tr></thead><tbody id="tb-lap-opname"></tbody></table></div>
+      <div class="card-header"><div><div class="card-title">Hasil Stock Opname</div><div class="card-sub" id="lap-opname-sub">Perbandingan stok sistem vs fisik</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>ID Barang</th><th>Nama Barang</th><th>Part No</th><th>Lokasi</th><th>Stok Sistem</th><th>Stok Fisik</th><th>Selisih</th><th>Keterangan</th><th>Status</th></tr></thead><tbody id="tb-lap-opname"></tbody></table></div>
     </div>
   </div>
 
