@@ -361,8 +361,10 @@ function goPage(name) {
   const R = {
     dashboard:renderDashboard,'master-barang':renderMasterBarang,'master-supplier':renderSupplier,
     'master-satuan':renderSatuan,'inp-masuk':renderMasuk,'inp-keluar':renderKeluar,
-    'inp-pindah':renderPindah,'inp-transfer':renderTransfer,'inp-opname':renderOpname,
-    'lap-rekap':renderRekap,'lap-opname':renderLapOpname,
+    'inp-pindah':renderPindah,'inp-transfer':renderTransfer,
+    'inp-opname': async () => { await loadOpnameBulan(); renderOpname(); },
+    'lap-rekap':renderRekap,
+    'lap-opname': async () => { await loadLapOpnameBulan(); renderLapOpname(); },
     'kelola-akun':renderKelolAkun,
   };
   if (R[name]) R[name]();
@@ -978,14 +980,126 @@ function resetOpname() {
   });
 }
 
-function renderLapOpname(){const rows=DB.barang.map((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:null,selisih=fisik!==null?fisik-sistem:null,st=fisik===null?'<span class="badge bg-gray">Belum</span>':selisih===0?'<span class="badge bg-green">Sesuai</span>':selisih>0?'<span class="badge bg-blue">Lebih</span>':'<span class="badge bg-red">Kurang</span>';return`<tr><td style="color:var(--muted)">${i+1}</td><td style="font-family:var(--mono);font-size:11px">${esc(b.id)}</td><td><strong>${esc(b.nama)}</strong></td><td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(b.part_number)}</td><td style="font-family:var(--mono)">${fmt(sistem)}</td><td style="font-family:var(--mono)">${fisik!==null?fmt(fisik):'—'}</td><td style="font-family:var(--mono);font-weight:800;color:${selisih<0?'var(--red)':selisih>0?'var(--blue)':'var(--green)'}">${selisih!==null?(selisih>=0?'+':'')+fmt(selisih):'—'}</td><td style="color:var(--muted);font-size:12px">${selisih!==null&&selisih!==0?(selisih>0?'Kelebihan':'Kekurangan'):''}</td><td>${st}</td></tr>`;});document.getElementById('tb-lap-opname').innerHTML=rows.length===0?`<tr><td colspan="9"><div class="empty"><span class="empty-ico">📑</span><p>Lakukan opname terlebih dahulu</p></div></td></tr>`:rows.join('');}
+let LAP_OPNAME_BULAN = null; // format YYYY-MM
+let LAP_OPNAME_LOKASI = 'Semua';
+let DB_LAP_OPNAME = {}; // {lokasi: {barang_id: stok_fisik}}
+
+async function loadLapOpnameBulan() {
+  const bulan = LAP_OPNAME_BULAN || today().slice(0,7);
+  const dari = bulan + '-01', ke = bulan + '-31';
+  const { data } = await sb.from('stock_opname').select('*').gte('tanggal', dari).lte('tanggal', ke);
+  DB_LAP_OPNAME = {};
+  (data||[]).forEach(o => {
+    const lok = o.lokasi || 'Gudang';
+    if (!DB_LAP_OPNAME[lok]) DB_LAP_OPNAME[lok] = {};
+    DB_LAP_OPNAME[lok][o.barang_id] = o.stok_fisik;
+  });
+  const label = document.getElementById('lap-opname-bulan-label');
+  if (label) label.textContent = '📅 ' + namaBulan(bulan);
+  const nextBtn = document.getElementById('lap-opname-bulan-next');
+  if (nextBtn) nextBtn.disabled = bulan >= today().slice(0,7);
+}
+
+async function shiftLapOpnameBulan(delta) {
+  const bulan = LAP_OPNAME_BULAN || today().slice(0,7);
+  const [y, m] = bulan.split('-').map(Number);
+  let nm = m + delta, ny = y;
+  if (nm > 12) { nm = 1; ny++; }
+  if (nm < 1)  { nm = 12; ny--; }
+  const newBulan = `${ny}-${String(nm).padStart(2,'0')}`;
+  if (newBulan > today().slice(0,7)) return;
+  LAP_OPNAME_BULAN = newBulan;
+  await loadLapOpnameBulan();
+  renderLapOpname();
+}
+
+function setLapOpnameLokasi(lok, el) {
+  LAP_OPNAME_LOKASI = lok;
+  document.querySelectorAll('[id^="lap-op-chip-"]').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderLapOpname();
+}
+
+function renderLapOpname() {
+  const bulan = LAP_OPNAME_BULAN || today().slice(0,7);
+  const lokasiList = LAP_OPNAME_LOKASI === 'Semua' ? ['Gudang','Storing'] : [LAP_OPNAME_LOKASI];
+  const rows = [];
+  DB.barang.forEach((b, i) => {
+    const s = getStok(b.id);
+    lokasiList.forEach(lok => {
+      const sistem = lok === 'Gudang' ? s.gudang : s.storing;
+      const fisik = DB_LAP_OPNAME[lok]?.[b.id] !== undefined ? DB_LAP_OPNAME[lok][b.id] : null;
+      const selisih = fisik !== null ? fisik - sistem : null;
+      const st = fisik === null
+        ? '<span class="badge bg-gray">Belum</span>'
+        : selisih === 0 ? '<span class="badge bg-green">Sesuai</span>'
+        : selisih > 0 ? '<span class="badge bg-blue">Lebih</span>'
+        : '<span class="badge bg-red">Kurang</span>';
+      rows.push({b, lok, sistem, fisik, selisih, st});
+    });
+  });
+  const sudah = rows.filter(r => r.fisik !== null).length;
+  const sub = document.getElementById('lap-opname-sub');
+  if (sub) sub.textContent = `${namaBulan(bulan)} — ${LAP_OPNAME_LOKASI} · ${sudah} dari ${rows.length} barang`;
+  document.getElementById('tb-lap-opname').innerHTML = rows.length === 0
+    ? `<tr><td colspan="10"><div class="empty"><span class="empty-ico">📑</span><p>Lakukan opname terlebih dahulu</p></div></td></tr>`
+    : rows.map((r, i) => `<tr>
+        <td style="color:var(--muted)">${i+1}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(r.b.id)}</td>
+        <td><strong>${esc(r.b.nama)}</strong></td>
+        <td style="font-family:var(--mono);color:var(--muted);font-size:12px">${esc(r.b.part_number)}</td>
+        <td><span class="badge ${r.lok==='Gudang'?'bg-blue':'bg-green'}">${r.lok}</span></td>
+        <td style="font-family:var(--mono)">${fmt(r.sistem)}</td>
+        <td style="font-family:var(--mono)">${r.fisik !== null ? fmt(r.fisik) : '—'}</td>
+        <td style="font-family:var(--mono);font-weight:800;color:${r.selisih===null?'var(--muted)':r.selisih<0?'var(--red)':r.selisih>0?'var(--blue)':'var(--green)'}">${r.selisih !== null ? (r.selisih >= 0 ? '+' : '') + fmt(r.selisih) : '—'}</td>
+        <td style="color:var(--muted);font-size:12px">${r.selisih !== null && r.selisih !== 0 ? (r.selisih > 0 ? 'Kelebihan' : 'Kekurangan') : ''}</td>
+        <td>${r.st}</td>
+      </tr>`).join('');
+}
 
 // Export tetap sama
 function exportCSV(){if(!DB.barang.length){toast('Tidak ada data','err');return;}let csv='No,ID Barang,Nama Barang,Part Number,Model,Stok Gudang,Stok Storing,Total\n';DB.barang.forEach((b,i)=>{const s=getStok(b.id);csv+=`${i+1},"${b.id}","${b.nama}","${b.part_number}","${b.model||''}",${s.gudang},${s.storing},${s.gudang+s.storing}\n`;});const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=`laporan-rekap-${today()}.csv`;a.click();toast('CSV diekspor');}
 function exportPDF(){const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape'});doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(0,79,53);doc.text('LAPORAN REKAPITULASI STOK — StockPro',14,18);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(100);doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}`,14,26);const rows=DB.barang.map((b,i)=>{const s=getStok(b.id);return[i+1,b.id,b.nama,b.part_number,b.model||'-',s.gudang,s.storing,s.gudang+s.storing,s.gudang+s.storing===0?'Habis':s.gudang+s.storing<5?'Kritis':'Aman'];});doc.autoTable({startY:32,head:[['#','ID','Nama Barang','Part No','Model','Gudang','Storing','Total','Status']],body:rows,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[0,79,53],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[240,250,245]}});doc.save(`laporan-rekap-${today()}.pdf`);toast('PDF diunduh 📄');}
-function exportOpnameCSV(){let csv='No,ID,Nama,Part No,Stok Sistem,Stok Fisik,Selisih,Status\n';DB.barang.forEach((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'',selisih=fisik!==''?fisik-sistem:'',status=fisik===''?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';csv+=`${i+1},"${b.id}","${b.nama}","${b.part_number}",${sistem},${fisik},${selisih},"${status}"\n`;});const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=`laporan-opname-${today()}.csv`;a.click();toast('CSV Opname diekspor');}
-function exportOpnamePDF(){const{jsPDF}=window.jspdf;const doc=new jsPDF();doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(0,79,53);doc.text('LAPORAN STOCK OPNAME — StockPro',14,18);const rows=DB.barang.map((b,i)=>{const s=getStok(b.id),sistem=s.gudang+s.storing,fisik=DB.opname[b.id]!==undefined?DB.opname[b.id]:'-',selisih=fisik!=='-'?fisik-sistem:'-',status=fisik==='-'?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';return[i+1,b.id,b.nama,b.part_number,sistem,fisik,selisih!=='-'?(selisih>=0?'+':'')+fmt(selisih):'-',status];});doc.autoTable({startY:28,head:[['#','ID','Nama Barang','Part No','Sistem','Fisik','Selisih','Status']],body:rows,styles:{fontSize:9},headStyles:{fillColor:[90,62,0],textColor:255,fontStyle:'bold'}});doc.save(`laporan-opname-${today()}.pdf`);toast('PDF Opname diunduh 📄');}
-
+function exportOpnameCSV(){
+  const bulan = LAP_OPNAME_BULAN || today().slice(0,7);
+  const lokasiList = LAP_OPNAME_LOKASI === 'Semua' ? ['Gudang','Storing'] : [LAP_OPNAME_LOKASI];
+  let csv='No,ID,Nama,Part No,Lokasi,Stok Sistem,Stok Fisik,Selisih,Status\n';
+  let i=1;
+  DB.barang.forEach(b=>{
+    const s=getStok(b.id);
+    lokasiList.forEach(lok=>{
+      const sistem=lok==='Gudang'?s.gudang:s.storing;
+      const fisik=DB_LAP_OPNAME[lok]?.[b.id]!==undefined?DB_LAP_OPNAME[lok][b.id]:'';
+      const selisih=fisik!==''?fisik-sistem:'';
+      const status=fisik===''?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';
+      csv+=`${i++},"${b.id}","${b.nama}","${b.part_number}","${lok}",${sistem},${fisik},${selisih},"${status}"\n`;
+    });
+  });
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=`laporan-opname-${bulan}.csv`;a.click();toast('CSV Opname diekspor');
+}
+function exportOpnamePDF(){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  const bulan = LAP_OPNAME_BULAN || today().slice(0,7);
+  const lokasiList = LAP_OPNAME_LOKASI === 'Semua' ? ['Gudang','Storing'] : [LAP_OPNAME_LOKASI];
+  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(0,79,53);
+  doc.text(`LAPORAN STOCK OPNAME — ${namaBulan(bulan)}`,14,18);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100);
+  doc.text(`Lokasi: ${LAP_OPNAME_LOKASI} | Dicetak: ${new Date().toLocaleDateString('id-ID')}`,14,26);
+  const rows=[];let i=1;
+  DB.barang.forEach(b=>{
+    const s=getStok(b.id);
+    lokasiList.forEach(lok=>{
+      const sistem=lok==='Gudang'?s.gudang:s.storing;
+      const fisik=DB_LAP_OPNAME[lok]?.[b.id]!==undefined?DB_LAP_OPNAME[lok][b.id]:'-';
+      const selisih=fisik!=='-'?fisik-sistem:'-';
+      const status=fisik==='-'?'Belum':selisih===0?'Sesuai':selisih>0?'Lebih':'Kurang';
+      rows.push([i++,b.id,b.nama,b.part_number,lok,sistem,fisik,selisih!=='-'?(selisih>=0?'+':'')+fmt(selisih):'-',status]);
+    });
+  });
+  doc.autoTable({startY:32,head:[['#','ID','Nama Barang','Part No','Lokasi','Sistem','Fisik','Selisih','Status']],body:rows,styles:{fontSize:8},headStyles:{fillColor:[90,62,0],textColor:255,fontStyle:'bold'}});
+  doc.save(`laporan-opname-${bulan}.pdf`);toast('PDF Opname diunduh 📄');
+}
 // ============================================================
 // INIT
 // ============================================================
