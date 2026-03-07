@@ -1170,6 +1170,18 @@ function parseImportRows(rows) {
       obj._error = true;
     }
 
+    // Validasi qty > 0 untuk tabel transaksi
+    if (cfg.keys.includes('qty') && (obj.qty === 0 || obj.qty === '' || obj.qty === null || isNaN(obj.qty))) {
+      errors.push(`Baris ${i+2}: QTY harus lebih dari 0 (nilai saat ini: ${obj.qty})`);
+      obj._error = true;
+    }
+
+    // Cek duplicate ID dalam file yang sedang diimport
+    if (obj.id && importRows.some(r => r.id === obj.id)) {
+      errors.push(`Baris ${i+2}: ID "${obj.id}" duplikat dalam file ini — akan diskip`);
+      obj._error = true;
+    }
+
     // Validasi barang_id exists
     if (obj.barang_id && !DB.barang.find(b => b.id === obj.barang_id)) {
       errors.push(`Baris ${i+2}: ID Barang "${obj.barang_id}" tidak ditemukan`);
@@ -1302,8 +1314,8 @@ async function submitImport() {
           if (!c.id) delete c.id;
           return c;
         });
-        console.log('[Import] Inserting batch ke', table, JSON.stringify(cleanBatch[0]));
-        ({ error } = await sb.from(table).insert(cleanBatch));
+        console.log('[Import] Upserting batch ke', table, JSON.stringify(cleanBatch[0]));
+        ({ error } = await sb.from(table).upsert(cleanBatch, { onConflict: 'id', ignoreDuplicates: true }));
       } else {
         ({ error } = await sb.from(table).upsert(batch, { onConflict: conflictCol, ignoreDuplicates: true }));
       }
@@ -1315,7 +1327,7 @@ async function submitImport() {
           if (isTransaksi) {
             const c = {...row}; if (!c.id) delete c.id;
             console.log('[Import] Trying row:', JSON.stringify(c));
-            ({ error: e2 } = await sb.from(table).insert([c]));
+            ({ error: e2 } = await sb.from(table).upsert([c], { onConflict: 'id', ignoreDuplicates: true }));
           } else {
             ({ error: e2 } = await sb.from(table).upsert([row], { onConflict: conflictCol, ignoreDuplicates: true }));
           }
