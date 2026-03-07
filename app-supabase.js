@@ -27,15 +27,31 @@ const PAG = { barang:{p:1,pp:100}, masuk:{p:1,pp:100}, keluar:{p:1,pp:100} };
 // SUPABASE DIRECT — tidak butuh backend Railway
 // ============================================================
 async function sbGet(table, filters={}) {
-  let q = sb.from(table).select('*');
-  if (filters.order) q = q.order(filters.order, { ascending: filters.asc ?? true });
-  if (filters.eq) Object.entries(filters.eq).forEach(([k,v]) => q = q.eq(k,v));
-  if (filters.ilike) q = q.ilike(filters.ilike[0], `%${filters.ilike[1]}%`);
-  if (filters.gte) q = q.gte(filters.gte[0], filters.gte[1]);
-  if (filters.lte) q = q.lte(filters.lte[0], filters.lte[1]);
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return data || [];
+  // Paginated fetch — looping sampai semua data terambil (bypass limit 1000 Supabase)
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let from = 0;
+
+  while (true) {
+    let q = sb.from(table).select('*');
+    if (filters.order) q = q.order(filters.order, { ascending: filters.asc ?? true });
+    if (filters.eq) Object.entries(filters.eq).forEach(([k,v]) => q = q.eq(k,v));
+    if (filters.ilike) q = q.ilike(filters.ilike[0], `%${filters.ilike[1]}%`);
+    if (filters.gte) q = q.gte(filters.gte[0], filters.gte[1]);
+    if (filters.lte) q = q.lte(filters.lte[0], filters.lte[1]);
+    q = q.range(from, from + PAGE_SIZE - 1);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const rows = data || [];
+    allData = allData.concat(rows);
+
+    // Kalau hasil < PAGE_SIZE, berarti sudah halaman terakhir
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return allData;
 }
 async function sbInsert(table, row) {
   const { data, error } = await sb.from(table).insert([row]).select().single();
