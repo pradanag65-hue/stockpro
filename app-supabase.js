@@ -1624,6 +1624,19 @@ async function loadUserProfile() {
 async function renderKelolAkun() {
   const tbody = document.getElementById('tb-akun');
   if (!tbody) return;
+
+  const isAdmin = USER_PROFILE?.role === 'admin';
+
+  // Sembunyikan tombol tambah user jika bukan admin
+  const btnTambah = document.getElementById('btn-tambah-user');
+  if (btnTambah) btnTambah.style.display = isAdmin ? '' : 'none';
+
+  // Jika bukan admin, tampilkan pesan akses ditolak
+  if (!isAdmin) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><span class="empty-ico">🔒</span><p>Hanya Admin yang dapat mengelola akun</p></div></td></tr>`;
+    return;
+  }
+
   tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">⏳ Memuat data user...</td></tr>`;
   try {
     const { data, error } = await sb.from('user_profiles').select('*').order('created_at');
@@ -1655,6 +1668,7 @@ async function renderKelolAkun() {
 }
 
 async function saveUserBaru() {
+  if (USER_PROFILE?.role !== 'admin') { toast('Hanya Admin yang dapat menambah akun', 'err'); return; }
   const email = document.getElementById('au-email').value.trim();
   const pass  = document.getElementById('au-pass').value.trim();
   const nama  = document.getElementById('au-nama').value.trim();
@@ -1703,6 +1717,7 @@ async function saveUserBaru() {
 
 let editUserId = null;
 function openEditUser(uid) {
+  if (USER_PROFILE?.role !== 'admin') { toast('Hanya Admin yang dapat mengedit akun', 'err'); return; }
   editUserId = uid;
   const u = ALL_USERS.find(x=>x.id===uid);
   if (!u) return;
@@ -1771,6 +1786,7 @@ async function saveEditUser() {
 }
 
 async function toggleAktif(uid, aktif) {
+  if (USER_PROFILE?.role !== 'admin') { toast('Hanya Admin yang dapat mengubah status akun', 'err'); return; }
   const u = ALL_USERS.find(x=>x.id===uid);
   const { error } = await sb.from('user_profiles').update({ aktif }).eq('id', uid);
   if (error) { toast('Gagal: '+error.message,'err'); return; }
