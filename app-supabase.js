@@ -112,16 +112,10 @@ function stopIdleTimer() {
 
 // Cek session saat halaman dibuka
 async function checkSession() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    SESSION = session;
-    await loadAllData();
-    await loadUserProfile();
-    startIdleTimer();
-    showApp();
-  } else {
-    showLoginPage();
-  }
+  // Selalu paksa logout saat halaman dibuka — harus login ulang setiap kali
+  await sb.auth.signOut();
+  SESSION = null;
+  showLoginPage();
 }
 
 // ============================================================
