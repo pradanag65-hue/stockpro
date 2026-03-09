@@ -77,7 +77,37 @@ async function login(email, password) {
 async function logout() {
   await sb.auth.signOut();
   SESSION = null;
+  stopIdleTimer();
   showLoginPage();
+}
+
+// ============================================================
+// AUTO LOGOUT — 30 menit tidak aktif
+// ============================================================
+const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 menit
+let idleTimer = null;
+
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(async () => {
+    await sb.auth.signOut();
+    SESSION = null;
+    stopIdleTimer();
+    showLoginPage();
+    toast('Sesi berakhir karena tidak aktif selama 30 menit. Silakan login kembali.', 'warn');
+  }, IDLE_TIMEOUT);
+}
+
+function startIdleTimer() {
+  const events = ['mousemove','mousedown','keydown','touchstart','scroll','click'];
+  events.forEach(e => document.addEventListener(e, resetIdleTimer, { passive: true }));
+  resetIdleTimer();
+}
+
+function stopIdleTimer() {
+  clearTimeout(idleTimer);
+  const events = ['mousemove','mousedown','keydown','touchstart','scroll','click'];
+  events.forEach(e => document.removeEventListener(e, resetIdleTimer));
 }
 
 // Cek session saat halaman dibuka
@@ -87,6 +117,7 @@ async function checkSession() {
     SESSION = session;
     await loadAllData();
     await loadUserProfile();
+    startIdleTimer();
     showApp();
   } else {
     showLoginPage();
@@ -239,6 +270,7 @@ async function doLogin() {
     await loadAllData();
     await loadUserProfile();
     subscribeRealtime();
+    startIdleTimer();
     showApp();
     toast('Selamat datang! 👋');
   } catch(e) {
